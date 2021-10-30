@@ -1,18 +1,20 @@
 #include <bits/stdc++.h>
 using namespace std;
-class user
+class User
 {
 public:
     string user_name;
     string password;
+    string color_assignment;
 };
-class group
+class Group
 {
 public:
     string name;
-    unordered_set<string> user_names;
+    string owner;
+    unordered_set<string> members;
 };
-class peer
+class Peer
 {
 public:
     string ip_address;

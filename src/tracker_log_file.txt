@@ -1,3 +1,6 @@
 hello
-[Sat Oct 30 18:07:33 2021
-] [140737348212544]Started listening on: [127.0.0.1:3601]
+[Sat Oct 30 18:07:33 2021] [140737348212544]Started listening on: [127.0.0.1:3601]
+[Sat Oct 30 18:32:40 2021
+] [140737348208384]Client has disconnected
+[Sat Oct 30 18:36:44 2021
+] [140737348212544][ Started listening on: [127.0.0.1:3601] ]
