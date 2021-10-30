@@ -37,6 +37,9 @@ const string constants_socket_listen_failure = "Failed to listen to socket";
 const string constants_socket_recv_failure = "Failed to recieve message";
 const string constants_socket_send_failure = "Failed to send message";
 
+const string constants_client_disconnected = "Client has disconnected";
+const string cosntants_client_connected = "Client has connected";
+
 //-----------------------------------------------------------------------------------
 const int constants_message_buffer_limit = 1024;
 /**
@@ -55,7 +58,7 @@ pair<string, string> read_socket_input(string ip_port)
 {
     pair<string, string> socket_pair;
     socket_pair.first = ip_port.substr(0, ip_port.find(":"));
-    tracker_1.second = ip_port.substr(ip_port.find(":") + 1);
+    socket_pair.second = ip_port.substr(ip_port.find(":") + 1);
     return socket_pair;
 }
 /**
@@ -162,20 +165,20 @@ int client_setup(pair<string, string> socket_pair)
     struct addrinfo query;
     struct addrinfo *socket_addr;
     memset(&query, 0, sizeof(query));
+    query.ai_socktype = SOCK_STREAM; // Tcp connection protocol
+    query.ai_family = AF_INET;       // Ipv4 address family
     if (getaddrinfo(socket_pair.first.c_str(), socket_pair.second.c_str(), &query, &socket_addr) != 0)
     {
         log(constants_socket_failure + " : " + socket_pair.first + " " + socket_pair.second);
         return -1;
     }
     int socket_file;
-    if ((socket_file = socket(socket_addr->ai_family, socket_addr->ai_socktype, socket_addr->ai_protocol)) < 1)
-    {
-        log(constants_socket_failure + " : " + socket_pair.first + " " + socket_pair.second);
-        return -1;
-    }
+    socket_file = socket(socket_addr->ai_family, socket_addr->ai_socktype, socket_addr->ai_protocol);
+
     //Opens a connection to the socket
     if (connect(socket_file, socket_addr->ai_addr, socket_addr->ai_addrlen) == -1)
     {
+        close(socket_file);
         log(constants_socket_conn_failure + " : " + socket_pair.first + " " + socket_pair.second);
         return -1;
     }
@@ -192,7 +195,7 @@ int client_setup(pair<string, string> socket_pair)
  */
 int socket_send(int socket_fd, string message)
 {
-    if (send(socket_fd, message.c_str(), sizeof(message.c_str()), 0) == -1)
+    if (send(socket_fd, message.c_str(),message.size(), 0) == -1)
     {
         log(constants_socket_send_failure);
         throw(constants_socket_send_failure);
@@ -208,6 +211,11 @@ string socket_recieve(int socket_fd)
         log(constants_socket_recv_failure);
         throw(constants_socket_recv_failure);
     }
+    else if (bytes_recieved == 0)
+    {
+        throw(constants_client_disconnected);
+    }
     string message(buff);
-    return message;
+    string extract = message.substr(0, bytes_recieved);
+    return extract;
 }

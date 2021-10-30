@@ -8,12 +8,12 @@
             "name": "tracker",
             "type": "cppdbg",
             "request": "launch",
-            "program": "tracker",
+            "program": "${fileDirname}/tracker",
             "args": [
                 "tracker_info.txt"
             ],
             "stopAtEntry": false,
-            "cwd": "${fileDirname}",
+            "cwd": ".",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",
@@ -31,13 +31,13 @@
             "name": "client1",
             "type": "cppdbg",
             "request": "launch",
-            "program": "./src/client",
+            "program": "${fileDirname}/client",
             "args": [
                 "127.0.0.1:6000",
                 "tracker_info.txt"
             ],
             "stopAtEntry": false,
-            "cwd": "${fileDirname}",
+            "cwd": ".",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",
@@ -55,13 +55,13 @@
             "name": "client2",
             "type": "cppdbg",
             "request": "launch",
-            "program": "./src/client",
+            "program": "${fileDirname}/client",
             "args": [
                 "127.0.0.1:7000",
                 "tracker_info.txt"
             ],
             "stopAtEntry": false,
-            "cwd": "${fileDirname}",
+            "cwd": ".",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",
@@ -79,13 +79,13 @@
             "name": "client3",
             "type": "cppdbg",
             "request": "launch",
-            "program": "./src/client",
+            "program": "${fileDirname}/client",
             "args": [
                 "127.0.0.1:7050",
                 "tracker_info.txt"
             ],
             "stopAtEntry": false,
-            "cwd": "${fileDirname}",
+            "cwd": ".",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",

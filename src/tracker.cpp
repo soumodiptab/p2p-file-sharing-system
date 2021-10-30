@@ -24,23 +24,24 @@ void *thread_service(void *socket_fd)
         }
         catch (string error)
         {
-            log("Detaching client");
+            log(error);
             break;
         }
     }
     close(thread_socket_fd);
 }
 /**
- * @brief Will implement later -> command line interface inside tracker
+ * @brief Will implement later -> command line interface inside tracker[T.B.A.]
  *  Main features: show tracker statistics
+ * This will be on another thread
  */
 void shell_setup()
 {
-    
 }
 void start_tracker()
 {
     int tracker_socket_fd = server_setup(tracker_1);
+    log("Started listening on: [" + tracker_1.first + ":" + tracker_1.second + "]");
     while (true)
     {
         int *thread_socket_fd = new int;
@@ -63,7 +64,7 @@ int main(int argc, char *argv[])
         exit(1);
     }
     string file_path(argv[1]);
-    logging_level = 1;
+    logging_level = 3;
     set_log_file("tracker_log_file.txt");
     read_tracker_file(file_path);
     start_tracker();

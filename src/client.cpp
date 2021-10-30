@@ -11,7 +11,7 @@ void client_startup()
     while (true)
     {
         string echo;
-        cin >> echo;
+        getline(cin, echo);
         socket_send(client_fd, echo);
         string reply = socket_recieve(client_fd);
         cout << reply << endl;
@@ -25,7 +25,7 @@ int main(int argc, char *argv[])
     }
     string file_path(argv[2]);
     string socket_input(argv[1]);
-    logging_level = 1;
+    logging_level = 3;
     set_log_file("client_log_file.txt");
     read_tracker_file(file_path);
     client_socket = read_socket_input(socket_input);
