@@ -12,9 +12,7 @@ public:
     string user_name;
     string password;
     string color_assignment;
-    User()
-    {
-    }
+    User() {}
     User(string user_name, string password, string color_assignment)
     {
         this->user_name = user_name;
@@ -33,6 +31,7 @@ public:
     string port;
     string user_name;
     int socket_fd;
+    string listener_port;
 };
 class File
 {
@@ -46,14 +45,19 @@ class Group
 private:
     string name;
     string owner;
-    unordered_set<string> members;
+    set<string> members;
     vector<string> join_requests;
 
 public:
-    string create_group(string group_name, string username)
+    Group(string group_name, string username)
     {
         this->name = group_name;
         this->owner = username;
+        members.insert(owner);
+    }
+    string get_owner()
+    {
+        return owner;
     }
     bool is_member(string username)
     {
@@ -110,6 +114,10 @@ unordered_map<string, User> user_list;
  * 
  */
 unordered_map<string, Peer> logged_user_list;
+/**
+ * @brief <thread,username>
+ * 
+ */
 unordered_map<pthread_t, string> logged_user_threads;
 /**
  * @brief <thread,Peer>
@@ -162,7 +170,7 @@ vector<string> login_user(vector<string> &tokens)
     }
     else
     {
-        reply_tokens[0] = command_login;
+        reply_tokens = {command_login};
         reply_tokens.push_back(user_list[user_name].color_assignment);
         reply_tokens.push_back(reply_user_login);
         logged_user_list[user_name] = peer_list[pthread_self()];
@@ -181,49 +189,61 @@ vector<string> logout_user(vector<string> &tokens)
 }
 vector<string> create_group(vector<string> &tokens)
 {
-    string user_name = tokens[1];
-    string password = tokens[2];
     vector<string> reply_tokens = {command_print};
-    if (user_list.find(user_name) == user_list.end())
-    {
-
-        reply_tokens.push_back(reply_user_not_exist);
-    }
-    else if (logged_user_list.find(user_name) != logged_user_list.end())
-    {
-        reply_tokens.push_back(reply_user_already_login + ": " + logged_user_list[user_name].ip_address + " " + logged_user_list[user_name].port);
-    }
+    string group_name = tokens[1];
+    if (group_list.find(group_name) != group_list.end())
+        reply_tokens.push_back(reply_group_already_exists);
     else
     {
-        reply_tokens[0] = command_login;
-        reply_tokens.push_back(user_list[user_name].color_assignment);
-        reply_tokens.push_back(reply_user_login);
-        logged_user_list[user_name] = peer_list[pthread_self()];
+        group_list[group_name] = Group(group_name, logged_user_threads[pthread_self()]);
+        reply_tokens.push_back(reply_group_created);
     }
     return reply_tokens;
 }
 vector<string> join_group(vector<string> &tokens)
 {
-    string user_name = tokens[1];
-    string password = tokens[2];
+    string group_name = tokens[1];
     vector<string> reply_tokens = {command_print};
-    if (user_list.find(user_name) == user_list.end())
+    if (group_list.find(group_name) == group_list.end())
     {
-
-        reply_tokens.push_back(reply_user_not_exist);
-    }
-    else if (logged_user_list.find(user_name) != logged_user_list.end())
-    {
-        reply_tokens.push_back(reply_user_already_login + ": " + logged_user_list[user_name].ip_address + " " + logged_user_list[user_name].port);
+        reply_tokens.push_back(reply_group_not_exits);
     }
     else
     {
-        reply_tokens[0] = command_login;
-        reply_tokens.push_back(user_list[user_name].color_assignment);
-        reply_tokens.push_back(reply_user_login);
-        logged_user_list[user_name] = peer_list[pthread_self()];
+        reply_tokens.push_back(group_list[group_name].add_join_request(logged_user_threads[pthread_self()]));
     }
     return reply_tokens;
+}
+vector<string> list_requests(vector<string> &tokens)
+{
+    string group_name = tokens[1];
+    vector<string> reply_tokens = {command_print};
+    if (group_list.find(group_name) == group_list.end())
+    {
+        reply_tokens.push_back(reply_group_not_exits);
+    }
+    else if (group_list[group_name].get_owner() != logged_user_threads[pthread_self()])
+    {
+        reply_tokens.push_back(reply_group_not_owner);
+    }
+    else
+    {
+        if (group_list[group_name].get_pending_requests().empty())
+            reply_tokens.push_back(reply_group_no_pending);
+        else
+        {
+            string reply_message = "Pending Requests:";
+            for (auto req : group_list[group_name].get_pending_requests())
+            {
+                reply_message.append(" [" + req + "]");
+            }
+            reply_tokens.push_back(reply_message);
+        }
+    }
+    return reply_tokens;
+}
+vector<string> accept_request(vector<string> &tokens)
+{
 }
 vector<string> process(vector<string> &tokens)
 {
@@ -300,6 +320,7 @@ void start_tracker()
         struct sockaddr_in peer_address_cast = *((struct sockaddr_in *)&peer_address);
         new_peer.ip_address = inet_ntoa(peer_address_cast.sin_addr);
         new_peer.port = to_string(ntohs(peer_address_cast.sin_port));
+        new_peer.listener_port = socket_recieve(new_peer.socket_fd);
         int *fd = new int;
         *fd = new_peer.socket_fd;
         pthread_t worker_thread;

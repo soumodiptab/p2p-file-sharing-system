@@ -1,6 +1,6 @@
 #include "commons.h"
 pair<string, string> client_socket;
-pthread_t listner_thread;
+pthread_t listener_thread;
 bool validator(vector<string> tokens)
 {
     if (tokens.size() == 0)
@@ -45,6 +45,7 @@ void client_startup()
         log("Could not connect to Tracker [" + tracker_1.first + ":" + tracker_1.second + "]");
         exit(EXIT_FAILURE);
     }
+    socket_send(client_fd, client_socket.second);
     while (true)
     {
         try
@@ -90,7 +91,7 @@ int main(int argc, char *argv[])
     set_log_file("client_log_file.txt");
     read_tracker_file(file_path);
     client_socket = read_socket_input(socket_input);
-    pthread_create(&listner_thread, NULL, listener_startup, NULL);
+    //pthread_create(&listener_thread, NULL, listener_startup, NULL);
     client_startup();
     return 0;
 }
