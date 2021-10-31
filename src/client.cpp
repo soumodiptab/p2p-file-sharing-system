@@ -1,5 +1,6 @@
 #include "commons.h"
 pair<string, string> client_socket;
+pthread_t listner_thread;
 bool validator(vector<string> tokens)
 {
     if (tokens.size() == 0)
@@ -8,8 +9,13 @@ bool validator(vector<string> tokens)
         return true;
     else if (tokens[0] == command_login && tokens.size() == 3)
         return true;
-    else
+    else if (tokens[0] == command_create_group && tokens.size())
         return false;
+    else
+    {
+        cout << "||Invalid command" << endl;
+        return false;
+    }
 }
 void action(vector<string> tokens)
 {
@@ -20,6 +26,11 @@ void action(vector<string> tokens)
     if (tokens[0] == command_print && tokens.size() == 2)
     {
         cout << ">>" << tokens[1] << endl;
+    }
+    if ((tokens[0] == command_login || tokens[0] == command_logout) && tokens.size() == 3)
+    {
+        cout << tokens[1];
+        cout << ">>" << tokens[2] << endl;
     }
 }
 void client_startup()
@@ -58,6 +69,12 @@ void client_startup()
     }
     close(client_fd);
 }
+void *listener_startup(void *)
+{
+    int listener_fd = server_setup(client_socket);
+    
+    close(listener_fd);
+}
 int main(int argc, char *argv[])
 {
     if (argc != 3)
@@ -70,6 +87,7 @@ int main(int argc, char *argv[])
     set_log_file("client_log_file.txt");
     read_tracker_file(file_path);
     client_socket = read_socket_input(socket_input);
+    pthread_create(&listner_thread, NULL, listener_startup, NULL);
     client_startup();
     return 0;
 }

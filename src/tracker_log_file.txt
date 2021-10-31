@@ -6,3 +6,8 @@
 [Sun Oct 31 17:34:03 2021] [140737348212544][ Listening to socket:127.0.0.1 3601 ]
 [Sun Oct 31 17:34:14 2021] [140737348208384][ Connection to peer established :127.0.0.1 48256 ]
 [Sun Oct 31 17:34:57 2021] [140737348208384][ |create_user|u1|p1 ]
+[Sun Oct 31 18:06:13 2021] [140737348212544][ Listening to socket:127.0.0.1 3601 ]
+[Sun Oct 31 18:06:24 2021] [140737348208384][ Connection to peer established :127.0.0.1 48354 ]
+[Sun Oct 31 18:07:38 2021] [140737348208384][ |create_user|soumodipta|abracadabra ]
+[Sun Oct 31 18:57:21 2021] [140737348208384][ |create_user|soumodipta|absds ]
+[Sun Oct 31 19:11:53 2021] [140737348208384][ Opposite End has disconnected ]
