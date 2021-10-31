@@ -9,8 +9,12 @@ bool validator(vector<string> tokens)
         return true;
     else if (tokens[0] == command_login && tokens.size() == 3)
         return true;
-    else if (tokens[0] == command_create_group && tokens.size())
-        return false;
+    else if (tokens[0] == command_create_group && tokens.size() == 2)
+        return true;
+    else if (tokens[0] == command_join_group && tokens.size() == 2)
+        return true;
+    else if (tokens[0] == command_logout && tokens.size() == 1)
+        return true;
     else
     {
         cout << "||Invalid command" << endl;
@@ -72,7 +76,6 @@ void client_startup()
 void *listener_startup(void *)
 {
     int listener_fd = server_setup(client_socket);
-    
     close(listener_fd);
 }
 int main(int argc, char *argv[])
