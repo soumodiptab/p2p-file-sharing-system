@@ -1,6 +1,8 @@
-hello
-[Sat Oct 30 18:07:33 2021] [140737348212544]Started listening on: [127.0.0.1:3601]
-[Sat Oct 30 18:32:40 2021
-] [140737348208384]Client has disconnected
-[Sat Oct 30 18:36:44 2021
-] [140737348212544][ Started listening on: [127.0.0.1:3601] ]
+[Sun Oct 31 17:26:42 2021] [140737339815680][ Opposite End has disconnected ]
+[Sun Oct 31 17:26:53 2021] [140737331422976][ Connection to peer established :127.0.0.1 48236 ]
+[Sun Oct 31 17:31:18 2021] [140737331422976][ |create_user|u1|p1 ]
+[Sun Oct 31 17:33:29 2021] [140737348208384][ Opposite End has disconnected ]
+[Sun Oct 31 17:33:32 2021] [140737331422976][ Opposite End has disconnected ]
+[Sun Oct 31 17:34:03 2021] [140737348212544][ Listening to socket:127.0.0.1 3601 ]
+[Sun Oct 31 17:34:14 2021] [140737348208384][ Connection to peer established :127.0.0.1 48256 ]
+[Sun Oct 31 17:34:57 2021] [140737348208384][ |create_user|u1|p1 ]

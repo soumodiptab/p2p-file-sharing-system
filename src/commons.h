@@ -2,58 +2,30 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <netdb.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <pthread.h>
 #include <unistd.h>
 #include <string>
 #include <iostream>
 #include <fstream>
 #include <ctime>
+#include "classes.h"
 using namespace std;
 /**
  * @brief Header file to provide library for:
  * 1. socket connectivity using wrappers
  * 2. logging in console/logfile
  */
-string command_upload_file = "upload_file";
-string command_download_file = "download_file";
-string command_create_user = "create_user";
-string command_login = "login";
-string command_create_group = "create_group";
-string command_join_group = "join_group";
-string command_print = "print";
-string command_change_color = "change_color";
-/**
- * @brief Print logs |
- *  0 - no output printing
- *  1 - only console
- *  2 - only logs
- *  3 - both
- */
-int logging_level = 1;
-string log_file;
-/**
- * @brief backlog connections:
- * maximum length to which the queue of pending connections for sockfd may grow
- */
-const int constants_connection_backlog = 10;
-const string constants_socket_failure = "Failed to open socket";
-const string constants_socket_binding_failure = "Failed to bind socket";
-const string constants_socket_conn_failure = "Failed to connect socket";
-const string constants_socket_listen_failure = "Failed to listen to socket";
-const string constants_socket_recv_failure = "Failed to recieve message";
-const string constants_socket_send_failure = "Failed to send message";
-const string constants_socket_empty_reply = "Incorrect reply";
-const string constants_client_disconnected = "Opposite End has disconnected";
-const string cosntants_client_connected = "Client has connected";
 
-//-----------------------------------------------------------------------------------
-const int constants_message_buffer_limit = 1024;
 /**
  * @brief ip | port
  * 
  */
 pair<string, string> tracker_1;
 pair<string, string> tracker_2;
+
+//-----------------------------------------------------------------------------------
 
 vector<string> colors = {
     "\033[34m",
@@ -63,7 +35,16 @@ vector<string> colors = {
     "\033[33m",
     "\033[35m",
 };
-
+pthread_mutex_t log_mutex;
+/**
+ * @brief Print logs |
+ *  0 - no output printing
+ *  1 - only console
+ *  2 - only logs
+ *  3 - both
+ */
+int logging_level = 1;
+string log_file;
 /**
  * @brief Extracts the ip and port from the input string
  * 
@@ -102,14 +83,11 @@ string path_processor(string path)
  */
 void write_to_log(const std::string &message)
 {
+    pthread_mutex_lock(&log_mutex);
     ofstream file_out;
     file_out.open(log_file, std::ios_base::app);
-    pthread_t self = pthread_self();
-    time_t now = time(0);
-    string date_time = ctime(&now);
-    date_time.pop_back();
-    string final_message = "[" + date_time + "] " + "[" + to_string(self) + "][ " + message + " ]";
-    file_out << final_message << endl;
+    file_out << message << endl;
+    pthread_mutex_unlock(&log_mutex);
 }
 /**
  * @brief Selects between displaying log on console/log file
@@ -118,17 +96,22 @@ void write_to_log(const std::string &message)
  */
 void log(string message)
 {
+    pthread_t self = pthread_self();
+    time_t now = time(0);
+    string date_time = ctime(&now);
+    date_time.pop_back();
+    string final_message = "[" + date_time + "] " + "[" + to_string(self) + "][ " + message + " ]";
     switch (logging_level)
     {
     case 0:
         break;
     case 2:
-        write_to_log(message);
+        write_to_log(final_message);
         break;
     case 3:
-        write_to_log(message);
+        write_to_log(final_message);
     default:
-        cout << message << endl;
+        cout << final_message << endl;
     }
 }
 void set_log_file(string path)
@@ -172,6 +155,7 @@ int server_setup(pair<string, string> socket_pair)
         log(constants_socket_listen_failure + " : " + socket_pair.first + " " + socket_pair.second);
         return -1;
     }
+    log(constants_socket_listen_success + ":" + socket_pair.first + " " + socket_pair.second);
     freeaddrinfo(socket_addr);
     return socket_file;
 }
@@ -203,7 +187,7 @@ int client_setup(pair<string, string> socket_pair)
         log(constants_socket_conn_failure + " : " + socket_pair.first + " " + socket_pair.second);
         return -1;
     }
-
+    log(constants_socket_connected_success + ":" + socket_pair.first + " " + socket_pair.second);
     freeaddrinfo(socket_addr);
     return socket_file;
 }
@@ -304,7 +288,8 @@ vector<string> unpack_message(string &packed_message)
     {
         if (c == '|')
         {
-            tokens.push_back(temp_str);
+            if (!temp_str.empty())
+                tokens.push_back(temp_str);
             temp_str = "";
         }
         else

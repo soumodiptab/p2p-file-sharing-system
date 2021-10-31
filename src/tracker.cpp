@@ -1,5 +1,4 @@
 #include "commons.h"
-#include "classes.h"
 /**
  * When message arrives from peer ->
  * 1. Process input and segregate into commands [common input parser]
@@ -18,11 +17,36 @@ unordered_map<string, Group> group_list;
  * 
  */
 unordered_map<string, User> user_list;
+/**
+ * @brief <username,Peer>
+ * 
+ */
+unordered_map<string, Peer> logged_user_list;
+unordered_map<int, Peer> peer_list;
 int connected_clients = 0;
-void create_user(vector<string> &tokens)
+string color_picker()
 {
+    if (user_list.size() >= colors.size())
+        return "\033[0m";
+    else
+        return colors[user_list.size()];
 }
-string process(vector<string> &tokens)
+vector<string> create_user(vector<string> &tokens)
+{
+    string user_name = tokens[1];
+    string password = tokens[2];
+    vector<string> reply_tokens = {command_print};
+
+    if (user_list.find(user_name) != user_list.end())
+    {
+        reply_tokens.push_back(reply_user_already_exists);
+        return reply_tokens;
+    }
+    user_list[user_name] = User(user_name, password, "\033[34m");
+    reply_tokens.push_back(reply_user_new_user);
+    return reply_tokens;
+}
+vector<string> process(vector<string> &tokens)
 {
     if (tokens.size() == 0)
     {
@@ -30,12 +54,14 @@ string process(vector<string> &tokens)
     }
     if (tokens[0] == command_create_user)
     {
+        return create_user(tokens);
     }
 }
 void *thread_service(void *socket_fd)
 {
     int thread_socket_fd = *((int *)socket_fd);
     delete socket_fd;
+    log("Connection to peer established :" + peer_list[thread_socket_fd].ip_address + " " + peer_list[thread_socket_fd].port);
     while (true)
     {
         try
@@ -43,7 +69,8 @@ void *thread_service(void *socket_fd)
             string client_message = socket_recieve(thread_socket_fd);
             vector<string> client_message_tokens = unpack_message(client_message);
             log(client_message);
-            string reply = process(client_message_tokens);
+            vector<string> reply_tokens = process(client_message_tokens);
+            string reply = pack_message(reply_tokens);
             socket_send(thread_socket_fd, reply);
         }
         catch (string error)
@@ -53,6 +80,7 @@ void *thread_service(void *socket_fd)
         }
     }
     connected_clients--;
+    peer_list.erase(thread_socket_fd);
     close(thread_socket_fd);
 }
 /**
@@ -62,25 +90,30 @@ void *thread_service(void *socket_fd)
  */
 void shell_setup()
 {
+    cout << colors[0];
 }
 void start_tracker()
 {
     int tracker_socket_fd = server_setup(tracker_1);
-    log("Started listening on: [" + tracker_1.first + ":" + tracker_1.second + "]");
     while (true)
     {
-        int *thread_socket_fd = new int;
         struct sockaddr_storage peer_address;
         socklen_t peer_addr_size = sizeof(peer_address);
-        connected_clients++;
-        *thread_socket_fd = accept(tracker_socket_fd, (struct sockaddr *)&peer_address, &peer_addr_size);
-        if (*thread_socket_fd == -1)
+        Peer new_peer = Peer();
+        new_peer.socket_fd = accept(tracker_socket_fd, (struct sockaddr *)&peer_address, &peer_addr_size);
+        if (new_peer.socket_fd == -1)
         {
             log("Unable to connect");
             continue;
         }
-        pthread_t worker;
-        pthread_create(&worker, NULL, thread_service, thread_socket_fd);
+        struct sockaddr_in peer_address_cast = *((struct sockaddr_in *)&peer_address);
+        new_peer.ip_address = inet_ntoa(peer_address_cast.sin_addr);
+        new_peer.port = to_string(ntohs(peer_address_cast.sin_port));
+        peer_list[new_peer.socket_fd] = new_peer;
+        int *fd = new int;
+        *fd = new_peer.socket_fd;
+        pthread_t worker_thread;
+        pthread_create(&worker_thread, NULL, thread_service, fd);
     }
 }
 int main(int argc, char *argv[])
