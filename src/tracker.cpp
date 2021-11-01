@@ -50,6 +50,7 @@ private:
     pthread_mutex_t group_mutex;
 
 public:
+    Group() {}
     Group(string group_name, string username)
     {
         this->name = group_name;
@@ -279,8 +280,8 @@ vector<string> list_requests(vector<string> &tokens)
 }
 vector<string> accept_request(vector<string> &tokens)
 {
-    string group_name = tokens[0];
-    string member = tokens[1];
+    string group_name = tokens[1];
+    string member = tokens[2];
     vector<string> reply_tokens = {command_print};
     if (group_list.find(group_name) == group_list.end())
     {
@@ -294,7 +295,7 @@ vector<string> accept_request(vector<string> &tokens)
 }
 vector<string> leave_group(vector<string> &tokens)
 {
-    string group_name = tokens[0];
+    string group_name = tokens[1];
     vector<string> reply_tokens = {command_print};
     if (group_list.find(group_name) == group_list.end())
     {
@@ -352,6 +353,10 @@ vector<string> process(vector<string> &tokens)
         reply = leave_group(tokens);
     return reply;
 }
+void post_process(vector<string> &tokens)
+{
+    
+}
 void *thread_service(void *socket_fd)
 {
     int thread_socket_fd = *((int *)socket_fd);
@@ -366,6 +371,7 @@ void *thread_service(void *socket_fd)
             vector<string> reply_tokens = process(client_message_tokens);
             string reply = pack_message(reply_tokens);
             socket_send(thread_socket_fd, reply);
+            post_process(client_message_tokens);
         }
         catch (string error)
         {

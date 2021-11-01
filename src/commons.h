@@ -10,6 +10,9 @@
 #include <iostream>
 #include <fstream>
 #include <ctime>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <openssl/sha.h>
 #include "constants.h"
 using namespace std;
 /**
@@ -77,6 +80,18 @@ string path_processor(string path)
     string x;
     return x;
 }
+void sync_print_ln(string message)
+{
+    pthread_mutex_lock(&console_mutex);
+    cout << message << endl;
+    pthread_mutex_unlock(&console_mutex);
+}
+void sync_print(string message)
+{
+    pthread_mutex_lock(&console_mutex);
+    cout << message;
+    pthread_mutex_unlock(&console_mutex);
+}
 /**
  * @brief Writes to  a log file with timestamp and thread-id
  * 
@@ -90,6 +105,7 @@ void write_to_log(const std::string &message)
     file_out << message << endl;
     pthread_mutex_unlock(&log_mutex);
 }
+
 /**
  * @brief Selects between displaying log on console/log file
  * 
@@ -115,19 +131,6 @@ void log(string message)
         sync_print_ln(final_message);
     }
 }
-void sync_print_ln(string message)
-{
-    pthread_mutex_lock(&console_mutex);
-    cout << message << endl;
-    pthread_mutex_unlock(&console_mutex);
-}
-void sync_print(string message)
-{
-    pthread_mutex_lock(&console_mutex);
-    cout << message;
-    pthread_mutex_unlock(&console_mutex);
-}
-
 void set_log_file(string path)
 {
     log_file = path;
@@ -314,4 +317,46 @@ vector<string> unpack_message(string &packed_message)
     if (!temp_str.empty())
         tokens.push_back(temp_str);
     return tokens;
+}
+bool file_query(string path)
+{
+    struct stat entity;
+    if (stat(path.c_str(), &entity) == -1)
+    {
+        return false;
+    }
+    if (!S_ISREG(entity.st_mode))
+    {
+        return false;
+    }
+    return true;
+}
+int get_file_size(string path)
+{
+    struct stat entity;
+    if (stat(path.c_str(), &entity) == -1)
+    {
+        return -1;
+    }
+
+    return true;
+}
+string generate_SHA1(const char *target, int size)
+{
+    unsigned char temp[SHA_DIGEST_LENGTH];
+    char buffer[SHA_DIGEST_LENGTH * 2];
+    memset(temp, 0x0, SHA_DIGEST_LENGTH);
+    memset(buffer, 0x0, SHA_DIGEST_LENGTH * 2);
+    SHA1((unsigned char *)target, size, temp);
+    for (int i = 0; i < SHA_DIGEST_LENGTH; i++)
+    {
+        sprintf((char *)&(buffer[i * 2]), "%02x", temp[i]);
+    }
+    string temp_hash(buffer);
+    string final_hash = temp_hash.substr(0, SHA_DIGEST_LENGTH);
+    return final_hash;
+}
+string generate_SHA1(string message)
+{
+    return generate_SHA1(message.c_str(), message.size());
 }

@@ -60,3 +60,8 @@ const string reply_user_already_login = "User already logged in";
  * maximum length to which the queue of pending connections for sockfd may grow
  */
 const int constants_connection_backlog = 10;
+/**
+ * @brief Sets the block size of file
+ * 
+ */
+const int constants_file_block_size = 32;

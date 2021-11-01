@@ -18,3 +18,6 @@
 [Sun Oct 31 22:22:27 2021] [140737348208384][ Listening to socket:127.0.0.1 6000 ]
 [Sun Oct 31 22:28:17 2021] [140737348212544][ Connected to socket:127.0.0.1 3601 ]
 [Sun Oct 31 22:28:17 2021] [140737348208384][ Listening to socket:127.0.0.1 7000 ]
+[Mon Nov  1 14:57:46 2021] [140737348212544][ Connected to socket:127.0.0.1 3601 ]
+[Mon Nov  1 15:00:38 2021] [140737348212544][ Connected to socket:127.0.0.1 3601 ]
+[Mon Nov  1 15:22:51 2021] [140737348212544][ Opposite End has disconnected ]
