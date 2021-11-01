@@ -15,9 +15,17 @@ bool validator(vector<string> tokens)
         return true;
     else if (tokens[0] == command_logout && tokens.size() == 1)
         return true;
+    else if (tokens[0] == command_list_groups && tokens.size() == 1)
+        return true;
+    else if (tokens[0] == command_list_requests && tokens.size() == 2)
+        return true;
+    else if (tokens[0] == command_accept_request && tokens.size() == 3)
+        return true;
+    else if (tokens[0] == command_leave_group && tokens.size() == 2)
+        return true;
     else
     {
-        cout << "||Invalid command" << endl;
+        sync_print_ln("||Invalid command");
         return false;
     }
 }
@@ -29,12 +37,12 @@ void action(vector<string> tokens)
     }
     if (tokens[0] == command_print && tokens.size() == 2)
     {
-        cout << ">>" << tokens[1] << endl;
+        sync_print_ln(">>" + tokens[1]);
     }
     if ((tokens[0] == command_login || tokens[0] == command_logout) && tokens.size() == 3)
     {
-        cout << tokens[1];
-        cout << ">>" << tokens[2] << endl;
+        sync_print(tokens[1]);
+        sync_print_ln(">>" + tokens[2]);
     }
 }
 void client_startup()
@@ -51,7 +59,7 @@ void client_startup()
         try
         {
             string command_buffer;
-            cout << "<<";
+            sync_print("<<");
             fflush(stdout);
             getline(cin, command_buffer);
             vector<string> tokens = input_parser(command_buffer);
@@ -67,7 +75,7 @@ void client_startup()
         }
         catch (string error)
         {
-            cout << "Exiting client" << endl;
+            sync_print_ln("Exiting client");
             log(error);
             break;
         }

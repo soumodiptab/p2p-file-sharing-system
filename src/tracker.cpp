@@ -47,6 +47,7 @@ private:
     string owner;
     set<string> members;
     vector<string> join_requests;
+    pthread_mutex_t group_mutex;
 
 public:
     Group(string group_name, string username)
@@ -73,26 +74,60 @@ public:
      */
     string approve_join_request(string username)
     {
+        pthread_mutex_lock(&group_mutex);
+        string reply;
         if (join_requests.empty())
-            return reply_group_no_pending;
-        if (username == owner)
-            return reply_group_already_owner;
-        if (is_member(username))
-            return reply_group_already_member;
-        auto request_position = find(join_requests.begin(), join_requests.end(), username);
-        if (request_position == join_requests.end())
-            return reply_group_no_user_pending;
-        members.insert(username);
-        join_requests.erase(request_position);
-        return reply_group_new_member;
+            reply = reply_group_no_pending;
+        else if (username == owner)
+            reply = reply_group_already_owner;
+        else if (is_member(username))
+            reply = reply_group_already_member;
+        else
+        {
+            auto request_position = find(join_requests.begin(), join_requests.end(), username);
+            if (request_position == join_requests.end())
+                reply = reply_group_no_user_pending;
+            else
+            {
+                members.insert(username);
+                join_requests.erase(request_position);
+                reply = reply_group_new_member;
+            }
+        }
+        pthread_mutex_unlock(&group_mutex);
+        return reply;
     }
     string add_join_request(string username)
     {
+        pthread_mutex_lock(&group_mutex);
+        string reply;
         auto request_position = find(join_requests.begin(), join_requests.end(), username);
         if (request_position != join_requests.end())
-            return reply_group_already_join;
-        join_requests.push_back(username);
-        return reply_group_join_added;
+            reply = reply_group_already_join;
+        else
+        {
+            join_requests.push_back(username);
+            reply = reply_group_join_added;
+        }
+        pthread_mutex_unlock(&group_mutex);
+        return reply;
+    }
+    string remove_request(string username)
+    {
+        pthread_mutex_lock(&group_mutex);
+        string reply;
+        auto request_position = find(join_requests.begin(), join_requests.end(), username);
+        if (request_position == join_requests.end())
+            reply = reply_group_not_member;
+        else if (owner == username) //dont allow owner to leave group for now
+            reply = reply_group_owner_not_leave;
+        else
+        {
+            members.erase(username);
+            reply = reply_group_leave_group;
+        }
+        pthread_mutex_unlock(&group_mutex);
+        return reply;
     }
     vector<string> get_pending_requests()
     {
@@ -244,30 +279,77 @@ vector<string> list_requests(vector<string> &tokens)
 }
 vector<string> accept_request(vector<string> &tokens)
 {
+    string group_name = tokens[0];
+    string member = tokens[1];
+    vector<string> reply_tokens = {command_print};
+    if (group_list.find(group_name) == group_list.end())
+    {
+        reply_tokens.push_back(reply_group_not_exits);
+    }
+    else
+    {
+        reply_tokens.push_back(group_list[group_name].approve_join_request(member));
+    }
+    return reply_tokens;
 }
+vector<string> leave_group(vector<string> &tokens)
+{
+    string group_name = tokens[0];
+    vector<string> reply_tokens = {command_print};
+    if (group_list.find(group_name) == group_list.end())
+    {
+        reply_tokens.push_back(reply_group_not_exits);
+    }
+    else
+    {
+        reply_tokens.push_back(group_list[group_name].remove_request(logged_user_threads[pthread_self()]));
+    }
+    return reply_tokens;
+}
+vector<string> list_groups(vector<string> &tokens)
+{
+    vector<string> reply_tokens = {command_print};
+    if (group_list.empty())
+    {
+        reply_tokens.push_back(reply_group_no_group);
+    }
+    else
+    {
+        string reply_message = "Groups on network: ";
+        for (auto group : group_list)
+        {
+            reply_message.append(" [" + group.first + "]");
+        }
+        reply_tokens.push_back(reply_message);
+    }
+    return reply_tokens;
+}
+
 vector<string> process(vector<string> &tokens)
 {
     vector<string> reply = {command_print, reply_default};
     if (tokens.size() == 0)
-    {
         throw constants_socket_empty_reply;
-    }
     if (tokens[0] == command_create_user)
-    {
         reply = create_user(tokens);
-    }
     else if (tokens[0] == command_login)
-    {
         reply = login_user(tokens);
-    }
     else if (logged_user_threads.find(pthread_self()) == logged_user_threads.end())
-    {
         reply = {command_print, reply_user_not_login};
-    }
     else if (tokens[0] == command_logout)
-    {
         reply = logout_user(tokens);
-    }
+    else if (tokens[0] == command_create_group)
+        reply = create_group(tokens);
+    else if (tokens[0] == command_join_group)
+        reply = join_group(tokens);
+    else if (tokens[0] == command_list_groups)
+        reply = list_groups(tokens);
+    else if (tokens[0] == command_list_requests)
+        reply = list_requests(tokens);
+    else if (tokens[0] == command_accept_request)
+        reply = accept_request(tokens);
+    else if (tokens[0] == command_leave_group)
+        reply = leave_group(tokens);
     return reply;
 }
 void *thread_service(void *socket_fd)

@@ -36,6 +36,7 @@ vector<string> colors = {
     "\033[35m",
 };
 pthread_mutex_t log_mutex;
+pthread_mutex_t console_mutex;
 /**
  * @brief Print logs |
  *  0 - no output printing
@@ -111,9 +112,22 @@ void log(string message)
     case 3:
         write_to_log(final_message);
     default:
-        cout << final_message << endl;
+        sync_print_ln(final_message);
     }
 }
+void sync_print_ln(string message)
+{
+    pthread_mutex_lock(&console_mutex);
+    cout << message << endl;
+    pthread_mutex_unlock(&console_mutex);
+}
+void sync_print(string message)
+{
+    pthread_mutex_lock(&console_mutex);
+    cout << message;
+    pthread_mutex_unlock(&console_mutex);
+}
+
 void set_log_file(string path)
 {
     log_file = path;
