@@ -60,7 +60,6 @@ private:
      * 
      */
     unordered_map<string, FileInfo> file_list;
-    pthread_mutex_t group_mutex;
 
 public:
     Group() {}
@@ -88,7 +87,6 @@ public:
      */
     string approve_join_request(string username)
     {
-        pthread_mutex_lock(&group_mutex);
         string reply;
         if (join_requests.empty())
             reply = reply_group_no_pending;
@@ -108,27 +106,27 @@ public:
                 reply = reply_group_new_member;
             }
         }
-        pthread_mutex_unlock(&group_mutex);
         return reply;
     }
     string add_join_request(string username)
     {
-        pthread_mutex_lock(&group_mutex);
         string reply;
         auto request_position = find(join_requests.begin(), join_requests.end(), username);
         if (request_position != join_requests.end())
             reply = reply_group_already_join;
+        else if (members.find(username) != members.end())
+        {
+            reply = reply_group_already_member;
+        }
         else
         {
             join_requests.push_back(username);
             reply = reply_group_join_added;
         }
-        pthread_mutex_unlock(&group_mutex);
         return reply;
     }
     string remove_request(string username)
     {
-        pthread_mutex_lock(&group_mutex);
         string reply;
         auto request_position = find(join_requests.begin(), join_requests.end(), username);
         if (request_position == join_requests.end())
@@ -140,7 +138,6 @@ public:
             members.erase(username);
             reply = reply_group_leave_group;
         }
-        pthread_mutex_unlock(&group_mutex);
         return reply;
     }
     vector<string> get_pending_requests()
@@ -235,6 +232,7 @@ vector<string> login_user(vector<string> &tokens)
         reply_tokens.push_back(user_list[user_name].color_assignment);
         reply_tokens.push_back(reply_user_login);
         logged_user_list[user_name] = peer_list[pthread_self()];
+        peer_list[pthread_self()].user_name = user_name;
         logged_user_threads[pthread_self()] = user_name;
     }
     return reply_tokens;
@@ -246,6 +244,7 @@ vector<string> logout_user(vector<string> &tokens)
     reply_tokens.push_back(reply_user_logout);
     logged_user_list.erase(logged_user_threads[pthread_self()]);
     logged_user_threads.erase(pthread_self());
+    peer_list[pthread_self()].user_name.clear();
     return reply_tokens;
 }
 vector<string> create_group(vector<string> &tokens)
@@ -384,7 +383,9 @@ void store_file_block_hash(vector<string> &tokens)
     string group_name = tokens[1];
     string file_hash = tokens[2];
     int blocks = stoi(socket_recieve(get_current_socket()));
+    ack_send(get_current_socket());
     string file_name = socket_recieve(get_current_socket());
+    ack_send(get_current_socket());
     FileInfo file = FileInfo();
     file.file_name = file_name;
     file.file_hash = file_hash;
@@ -393,9 +394,11 @@ void store_file_block_hash(vector<string> &tokens)
     for (int i = 1; i <= blocks; i++)
     {
         string hash_block = socket_recieve(get_current_socket());
+        ack_send(get_current_socket());
         file.block_hashes.push_back(hash_block);
-        log("Hash of Block[" + to_string(i) + "]:" + hash_block);
+        log("Block[" + to_string(i) + "]:" + hash_block);
     }
+    ack_recieve(get_current_socket());
     group_list[group_name].add_file(file_hash, file);
     socket_send(get_current_socket(), reply_file_upload_complete);
 }
@@ -432,7 +435,7 @@ void post_process(vector<string> &tokens)
 {
     if (tokens.empty())
         return;
-    if (tokens[0] == command_upload_file)
+    if (tokens[0] == command_upload_file && tokens.size() == 3)
     {
         store_file_block_hash(tokens);
     }

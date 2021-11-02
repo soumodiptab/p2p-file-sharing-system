@@ -36,7 +36,9 @@
                 "tracker.cpp",
                 "-o",
                 "tracker",
-                "-lpthread"
+                "-lpthread",
+                "-lssl",
+                "-lcrypto"
             ],
             "options": {
                 "cwd": "${fileDirname}"
@@ -60,7 +62,9 @@
                 "client.cpp",
                 "-o",
                 "client",
-                "-lpthread"
+                "-lpthread",
+                "-lssl",
+                "-lcrypto"
             ],
             "options": {
                 "cwd": "${fileDirname}"

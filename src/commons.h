@@ -216,7 +216,7 @@ int client_setup(pair<string, string> socket_pair)
  * @return status
  * @throws exception incase unable to send due to socket closure
  */
-int socket_send(int socket_fd, string message)
+int socket_send(int socket_fd, const string &message)
 {
     if (send(socket_fd, message.c_str(), message.size(), 0) == -1)
     {
@@ -248,6 +248,27 @@ string socket_recieve(int socket_fd)
     string message(buff);
     string extract = message.substr(0, bytes_recieved);
     return extract;
+}
+/**
+ * @brief ACKNOWLEDGEMENT Sending to synchronize socket transfer
+ * 
+ * @param socket_fd 
+ * @return int 
+ */
+int ack_send(int socket_fd)
+{
+    string ack = "ACK";
+    return socket_send(socket_fd, ack);
+}
+/**
+ * @brief ACKNOWLEDGEMENT Recieve to synchronize socket transfer
+ * 
+ * @param socket_fd 
+ * @return string 
+ */
+string ack_recieve(int socket_fd)
+{
+    return socket_recieve(socket_fd);
 }
 /**
  * @brief Parses command input and convert into tokens
@@ -362,6 +383,6 @@ string generate_SHA1(string message)
 }
 string extract_file_name(string &path)
 {
-    string file_name=path.substr(path.find_last_of('/')+1,path.size()-path.find_last_of('/')+1);
+    string file_name = path.substr(path.find_last_of('/') + 1, path.size() - path.find_last_of('/') + 1);
     return file_name;
 }

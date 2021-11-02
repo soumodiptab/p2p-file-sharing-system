@@ -23,8 +23,10 @@ public:
     }
     FileInfo(string path, int blocks)
     {
-        FileInfo(path);
+        this->file_name = extract_file_name(path);
+        this->path = path;
         integrity = vector<pair<bool, string>>(blocks, make_pair(0, ""));
+        this->blocks = blocks;
     }
     int open_file(int flag)
     {
@@ -41,7 +43,7 @@ public:
         integrity.clear();
         size = file_stat.st_size;
         int last_block_size = size;
-        int blocks = size / constants_file_block_size;
+        blocks = size / constants_file_block_size;
         if (size % constants_file_block_size)
         {
             blocks += 1;
@@ -90,7 +92,7 @@ public:
 unordered_map<string, FileInfo> hosted_files;
 bool file_uploader(vector<string> &tokens)
 {
-    string path = tokens[0];
+    string path = tokens[1];
     if (!file_query(path))
     {
         sync_print_ln("|| Incorrect file path provided");
@@ -119,11 +121,15 @@ bool send_file_block_hash(int socket_fd, string file_hash)
 {
     FileInfo file = hosted_files[file_hash];
     socket_send(socket_fd, to_string(file.blocks));
+    ack_recieve(socket_fd);
     socket_send(socket_fd, file.file_name);
-    for (int i = 0; i < file.blocks; i++)
+    ack_recieve(socket_fd);
+    for (auto i : file.integrity)
     {
-        socket_send(socket_fd, file.integrity[i].second);
+        socket_send(socket_fd, i.second);
+        ack_recieve(socket_fd);
     }
+    ack_send(socket_fd);
     sync_print_ln(">>" + socket_recieve(socket_fd));
     return true;
 }
@@ -174,9 +180,9 @@ void action(vector<string> tokens)
     }
     if (tokens[0] == command_upload_file)
     {
-        if (tokens.size() == 2)
+        if (tokens.size() == 3)
         {
-            send_file_block_hash(client_fd, tokens[1]);
+            send_file_block_hash(client_fd, tokens[2]);
         }
         else
         {
@@ -190,6 +196,7 @@ void action(vector<string> tokens)
 }
 void client_startup()
 {
+    sleep(1);
     if ((client_fd = client_setup(tracker_1)) == -1)
     {
         log("Could not connect to Tracker [" + tracker_1.first + ":" + tracker_1.second + "]");
