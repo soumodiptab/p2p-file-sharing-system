@@ -360,3 +360,8 @@ string generate_SHA1(string message)
 {
     return generate_SHA1(message.c_str(), message.size());
 }
+string extract_file_name(string &path)
+{
+    string file_name=path.substr(path.find_last_of('/')+1,path.size()-path.find_last_of('/')+1);
+    return file_name;
+}

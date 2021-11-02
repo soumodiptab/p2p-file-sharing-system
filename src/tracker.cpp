@@ -33,12 +33,20 @@ public:
     int socket_fd;
     string listener_port;
 };
-class File
+class FileInfo
 {
+public:
+    FileInfo() {}
+    FileInfo(string file_name, string file_hash)
+    {
+        this->file_hash = file_hash;
+        this->file_name = file_name;
+    }
     string file_name;
     string file_hash;
-    string file_path;
-    Peer *peer;
+    bool status;
+    vector<string> block_hashes;
+    vector<Peer> peer_list;
 };
 class Group
 {
@@ -47,6 +55,11 @@ private:
     string owner;
     set<string> members;
     vector<string> join_requests;
+    /**
+     * @brief <filehash,Information of File>
+     * 
+     */
+    unordered_map<string, FileInfo> file_list;
     pthread_mutex_t group_mutex;
 
 public:
@@ -134,6 +147,14 @@ public:
     {
         return join_requests;
     }
+    unordered_map<string, FileInfo> get_files()
+    {
+        return file_list;
+    }
+    void add_file(string hash_file, string file_name)
+    {
+        file_list[hash_file] = FileInfo(file_name, hash_file);
+    }
 };
 /**
  * @brief <groupname,Group>
@@ -160,6 +181,10 @@ unordered_map<pthread_t, string> logged_user_threads;
  * 
  */
 unordered_map<pthread_t, Peer> peer_list;
+int get_current_socket()
+{
+    return logged_user_list[logged_user_threads[pthread_self()]].socket_fd;
+}
 string color_picker()
 {
     if (user_list.size() >= colors.size())
@@ -325,7 +350,42 @@ vector<string> list_groups(vector<string> &tokens)
     }
     return reply_tokens;
 }
-
+vector<string> upload_file(vector<string> &tokens)
+{
+    string file_path = tokens[1];
+    string file_name = extract_file_name(file_path);
+    string file_hash = generate_SHA1(file_name);
+    string group_name = tokens[2];
+    vector<string> reply_tokens = {command_upload_file};
+    if (group_list.find(group_name) == group_list.end())
+    {
+        reply_tokens.push_back(to_string(false));
+        reply_tokens.push_back(reply_group_not_exits);
+    }
+    else if (!group_list[group_name].is_member(logged_user_threads[pthread_self()]))
+    {
+        reply_tokens.push_back(to_string(false));
+        reply_tokens.push_back(reply_group_not_member);
+    }
+    else if (group_list[group_name].get_files().find(file_hash) != group_list[group_name].get_files().end()) //file already present check integrity
+    {
+        reply_tokens = {command_upload_verify};
+    }
+    else // new file
+    {
+        reply_tokens = {command_upload_file, group_name, file_hash};
+    }
+    return reply_tokens;
+}
+void store_file_block_hash(vector<string> &tokens)
+{
+    string group_name = tokens[1];
+    string file_hash = tokens[2];
+    int blocks = stoi(socket_recieve(get_current_socket()));
+    for (int i = 1; i <= blocks; i++)
+    {
+    }
+}
 vector<string> process(vector<string> &tokens)
 {
     vector<string> reply = {command_print, reply_default};
@@ -351,11 +411,18 @@ vector<string> process(vector<string> &tokens)
         reply = accept_request(tokens);
     else if (tokens[0] == command_leave_group)
         reply = leave_group(tokens);
+    else if (tokens[0] == command_upload_file)
+        reply = upload_file(tokens);
     return reply;
 }
 void post_process(vector<string> &tokens)
 {
-    
+    if (tokens.empty())
+        return;
+    if (tokens[0] == command_upload_file)
+    {
+        store_file_block_hash(tokens);
+    }
 }
 void *thread_service(void *socket_fd)
 {
@@ -367,11 +434,12 @@ void *thread_service(void *socket_fd)
         {
             string client_message = socket_recieve(thread_socket_fd);
             vector<string> client_message_tokens = unpack_message(client_message);
-            log(client_message);
+            log("REQ: " + client_message);
             vector<string> reply_tokens = process(client_message_tokens);
             string reply = pack_message(reply_tokens);
+            log("REPLY: " + reply);
             socket_send(thread_socket_fd, reply);
-            post_process(client_message_tokens);
+            post_process(reply_tokens);
         }
         catch (string error)
         {

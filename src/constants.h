@@ -1,6 +1,7 @@
 #include <bits/stdc++.h>
 using namespace std;
 const string command_upload_file = "upload_file";
+const string command_upload_verify = "upload_verify";
 const string command_download_file = "download_file";
 const string command_create_user = "create_user";
 const string command_login = "login";

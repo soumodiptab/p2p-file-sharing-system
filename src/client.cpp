@@ -1,21 +1,25 @@
 #include "commons.h"
 pair<string, string> client_socket_listener;
 pthread_t listener_thread;
+int client_fd;
 class FileInfo
 {
 public:
+    string file_name;
     string file_hash;
     string path;
     int file_descriptor;
     struct stat file_stat;
     unsigned long long size;
     vector<pair<bool, string>> integrity;
+    int blocks;
     pthread_mutex_t file_sync;
     FileInfo(){};
     FileInfo(string path)
     {
+        this->file_name = extract_file_name(path);
         this->path = path;
-        file_hash = generate_SHA1(path);
+        file_hash = generate_SHA1(file_name);
     }
     FileInfo(string path, int blocks)
     {
@@ -79,6 +83,10 @@ public:
         pthread_mutex_unlock(&file_sync);
     }
 };
+/**
+ * @brief <file_hash,FileInfo>
+ * 
+ */
 unordered_map<string, FileInfo> hosted_files;
 bool file_uploader(vector<string> &tokens)
 {
@@ -105,10 +113,13 @@ bool file_uploader(vector<string> &tokens)
     file.file_stat = file_stats;
     file.file_hash_generation();
     hosted_files[file.file_hash] = file;
-    tokens.push_back(file.file_hash);
     return true;
 }
-
+bool send_file_block_hash(int socket_fd, string file_hash)
+{
+    FileInfo file=hosted_files[file_hash];
+    socket_send(socket_fd, to_string(file.blocks));
+}
 bool validator(vector<string> tokens)
 {
     if (tokens.size() == 0)
@@ -154,10 +165,16 @@ void action(vector<string> tokens)
         sync_print(tokens[1]);
         sync_print_ln(">>" + tokens[2]);
     }
+    if (tokens[0] == command_upload_file)
+    {
+        if (tokens.size() == 2)
+        {
+            send_file_block_hash(client_fd, tokens[1]);
+        }
+    }
 }
 void client_startup()
 {
-    int client_fd;
     if ((client_fd = client_setup(tracker_1)) == -1)
     {
         log("Could not connect to Tracker [" + tracker_1.first + ":" + tracker_1.second + "]");
