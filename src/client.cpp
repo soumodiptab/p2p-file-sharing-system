@@ -2,6 +2,7 @@
 pair<string, string> client_socket_listener;
 pthread_t listener_thread;
 int client_fd;
+bool user_logged_in = false;
 class FileInfo
 {
 public:
@@ -60,7 +61,9 @@ public:
         }
         char buffer[last_block_size];
         read(file_descriptor, buffer, last_block_size);
-        integrity.push_back(make_pair(1, generate_SHA1(buffer, last_block_size)));
+        string gen_hash = generate_SHA1(buffer, last_block_size);
+        integrity.push_back(make_pair(1, gen_hash));
+        log("block[" + to_string(blocks) + "] :" + gen_hash);
     }
     string get_bit_vector()
     {
@@ -90,6 +93,7 @@ public:
  * 
  */
 unordered_map<string, FileInfo> hosted_files;
+unordered_map<string, FileInfo> downloads;
 bool file_uploader(vector<string> &tokens)
 {
     string path = tokens[1];
@@ -119,6 +123,8 @@ bool file_uploader(vector<string> &tokens)
 }
 bool send_file_block_hash(int socket_fd, string file_hash)
 {
+    if (hosted_files.find(file_hash) == hosted_files.end())
+        return false;
     FileInfo file = hosted_files[file_hash];
     socket_send(socket_fd, to_string(file.blocks));
     ack_recieve(socket_fd);
@@ -132,6 +138,10 @@ bool send_file_block_hash(int socket_fd, string file_hash)
     ack_send(socket_fd);
     sync_print_ln(">>" + socket_recieve(socket_fd));
     return true;
+}
+void show_downloads()
+{
+    
 }
 bool validator(vector<string> tokens)
 {
@@ -157,6 +167,12 @@ bool validator(vector<string> tokens)
         return true;
     else if (tokens[0] == command_upload_file && tokens.size() == 3)
         return file_uploader(tokens);
+    else if (tokens[0] == command_list_files && tokens.size() == 2)
+        return true;
+    else if (tokens[0] == command_stop_share && tokens.size() == 3)
+        return true;
+    else if (tokens[0] == command_show_downloads && tokens.size() == 1)
+        return true;
     else
     {
         sync_print_ln("||Invalid command");
@@ -173,12 +189,19 @@ void action(vector<string> tokens)
     {
         sync_print_ln(">>" + tokens[1]);
     }
-    if ((tokens[0] == command_login || tokens[0] == command_logout) && tokens.size() == 3)
+    else if (tokens[0] == command_login && tokens.size() == 3)
     {
         sync_print(tokens[1]);
         sync_print_ln(">>" + tokens[2]);
+        user_logged_in = true;
     }
-    if (tokens[0] == command_upload_file)
+    else if (tokens[0] == command_logout && tokens.size() == 3)
+    {
+        sync_print(tokens[1]);
+        sync_print_ln(">>" + tokens[2]);
+        user_logged_in = false;
+    }
+    else if (tokens[0] == command_upload_file)
     {
         if (tokens.size() == 3)
         {

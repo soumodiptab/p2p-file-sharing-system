@@ -12,6 +12,7 @@ public:
     string user_name;
     string password;
     string color_assignment;
+    unordered_set<string> group_memberships;
     User() {}
     User(string user_name, string password, string color_assignment)
     {
@@ -44,10 +45,37 @@ public:
     }
     string file_name;
     string file_hash;
-    bool status;
     vector<string> block_hashes;
-    vector<Peer> peer_list;
+    vector<string> usernames;
 };
+/**
+ * @brief <username,User>
+ * 
+ */
+unordered_map<string, User> user_list;
+/**
+ * @brief <username,Peer>
+ * 
+ */
+unordered_map<string, Peer> logged_user_list;
+/**
+ * @brief <thread,username>
+ * 
+ */
+unordered_map<pthread_t, string> logged_user_threads;
+/**
+ * @brief <thread,Peer>
+ * 
+ */
+unordered_map<pthread_t, Peer> peer_list;
+bool is_user_logged_in(string username)
+{
+    if (logged_user_list.find(username) == logged_user_list.end())
+    {
+        return false;
+    }
+    return true;
+}
 class Group
 {
 private:
@@ -152,32 +180,54 @@ public:
     {
         file_list[hash_file] = file;
     }
+    vector<string> find_uploaders_online(string file_hash)
+    {
+        vector<string> final_uploaders_list;
+        for (auto user : file_list[file_hash].usernames)
+        {
+            if (is_user_logged_in(user))
+                final_uploaders_list.push_back(user);
+        }
+        return final_uploaders_list;
+    }
+    bool is_uploader_online(string filehash)
+    {
+        vector<string> uploaders = find_uploaders_online(filehash);
+        if (uploaders.empty())
+            return false;
+        return true;
+    }
+    string fetch_files()
+    {
+        string reply;
+        if (file_list.empty())
+        {
+            reply = reply_group_file_list_empty;
+        }
+        else
+        {
+            reply = "Files Available:";
+            int c = 0;
+            for (auto f : file_list)
+            {
+                if (is_uploader_online(f.first))
+                {
+                    reply.append(" [" + f.second.file_name + "]");
+                    c++;
+                }
+            }
+            if (c == 0)
+                reply = reply_group_file_list_empty;
+        }
+        return reply;
+    }
 };
 /**
  * @brief <groupname,Group>
  * 
  */
 unordered_map<string, Group> group_list;
-/**
- * @brief <username,User>
- * 
- */
-unordered_map<string, User> user_list;
-/**
- * @brief <username,Peer>
- * 
- */
-unordered_map<string, Peer> logged_user_list;
-/**
- * @brief <thread,username>
- * 
- */
-unordered_map<pthread_t, string> logged_user_threads;
-/**
- * @brief <thread,Peer>
- * 
- */
-unordered_map<pthread_t, Peer> peer_list;
+
 int get_current_socket()
 {
     return logged_user_list[logged_user_threads[pthread_self()]].socket_fd;
@@ -349,6 +399,24 @@ vector<string> list_groups(vector<string> &tokens)
     }
     return reply_tokens;
 }
+vector<string> list_files(vector<string> &tokens)
+{
+    string group_name = tokens[1];
+    vector<string> reply_tokens = {command_print};
+    if (group_list.empty())
+    {
+        reply_tokens.push_back(reply_group_no_group);
+    }
+    if (group_list.find(group_name) == group_list.end())
+    {
+        reply_tokens.push_back(reply_group_not_exits);
+    }
+    else
+    {
+        reply_tokens.push_back(group_list[group_name].fetch_files());
+    }
+    return reply_tokens;
+}
 vector<string> upload_file(vector<string> &tokens)
 {
     string file_path = tokens[1];
@@ -389,7 +457,7 @@ void store_file_block_hash(vector<string> &tokens)
     FileInfo file = FileInfo();
     file.file_name = file_name;
     file.file_hash = file_hash;
-    file.peer_list.push_back(peer_list[pthread_self()]);
+    file.usernames.push_back(logged_user_threads[pthread_self()]);
     log("File:" + file_name + " File hash: " + file_hash);
     for (int i = 1; i <= blocks; i++)
     {
@@ -402,6 +470,7 @@ void store_file_block_hash(vector<string> &tokens)
     group_list[group_name].add_file(file_hash, file);
     socket_send(get_current_socket(), reply_file_upload_complete);
 }
+
 vector<string> process(vector<string> &tokens)
 {
     vector<string> reply = {command_print, reply_default};
@@ -429,6 +498,8 @@ vector<string> process(vector<string> &tokens)
         reply = leave_group(tokens);
     else if (tokens[0] == command_upload_file)
         reply = upload_file(tokens);
+    else if (tokens[0] == command_list_files)
+        reply = list_files(tokens);
     return reply;
 }
 void post_process(vector<string> &tokens)

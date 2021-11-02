@@ -359,7 +359,6 @@ int get_file_size(string path)
     {
         return -1;
     }
-
     return true;
 }
 string generate_SHA1(const char *target, int size)
