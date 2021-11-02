@@ -117,8 +117,15 @@ bool file_uploader(vector<string> &tokens)
 }
 bool send_file_block_hash(int socket_fd, string file_hash)
 {
-    FileInfo file=hosted_files[file_hash];
+    FileInfo file = hosted_files[file_hash];
     socket_send(socket_fd, to_string(file.blocks));
+    socket_send(socket_fd, file.file_name);
+    for (int i = 0; i < file.blocks; i++)
+    {
+        socket_send(socket_fd, file.integrity[i].second);
+    }
+    sync_print_ln(">>" + socket_recieve(socket_fd));
+    return true;
 }
 bool validator(vector<string> tokens)
 {
@@ -170,6 +177,14 @@ void action(vector<string> tokens)
         if (tokens.size() == 2)
         {
             send_file_block_hash(client_fd, tokens[1]);
+        }
+        else
+        {
+            if (!stoi(tokens[1]))
+            {
+                hosted_files.erase(tokens[2]);
+                sync_print_ln(">>" + tokens[3]);
+            }
         }
     }
 }

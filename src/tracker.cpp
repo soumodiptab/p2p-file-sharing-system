@@ -151,9 +151,9 @@ public:
     {
         return file_list;
     }
-    void add_file(string hash_file, string file_name)
+    void add_file(string &hash_file, FileInfo &file)
     {
-        file_list[hash_file] = FileInfo(file_name, hash_file);
+        file_list[hash_file] = file;
     }
 };
 /**
@@ -360,11 +360,13 @@ vector<string> upload_file(vector<string> &tokens)
     if (group_list.find(group_name) == group_list.end())
     {
         reply_tokens.push_back(to_string(false));
+        reply_tokens.push_back(file_hash);
         reply_tokens.push_back(reply_group_not_exits);
     }
     else if (!group_list[group_name].is_member(logged_user_threads[pthread_self()]))
     {
         reply_tokens.push_back(to_string(false));
+        reply_tokens.push_back(file_hash);
         reply_tokens.push_back(reply_group_not_member);
     }
     else if (group_list[group_name].get_files().find(file_hash) != group_list[group_name].get_files().end()) //file already present check integrity
@@ -382,9 +384,20 @@ void store_file_block_hash(vector<string> &tokens)
     string group_name = tokens[1];
     string file_hash = tokens[2];
     int blocks = stoi(socket_recieve(get_current_socket()));
+    string file_name = socket_recieve(get_current_socket());
+    FileInfo file = FileInfo();
+    file.file_name = file_name;
+    file.file_hash = file_hash;
+    file.peer_list.push_back(peer_list[pthread_self()]);
+    log("File:" + file_name + " File hash: " + file_hash);
     for (int i = 1; i <= blocks; i++)
     {
+        string hash_block = socket_recieve(get_current_socket());
+        file.block_hashes.push_back(hash_block);
+        log("Hash of Block[" + to_string(i) + "]:" + hash_block);
     }
+    group_list[group_name].add_file(file_hash, file);
+    socket_send(get_current_socket(), reply_file_upload_complete);
 }
 vector<string> process(vector<string> &tokens)
 {

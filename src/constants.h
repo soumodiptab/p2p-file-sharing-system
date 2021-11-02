@@ -56,6 +56,7 @@ const string reply_user_logout = "User has been logged out";
 const string reply_user_login_incorrect = "Incorrect Password";
 const string reply_user_not_login = "User is not logged";
 const string reply_user_already_login = "User already logged in";
+const string reply_file_upload_complete = "File has been uploaded";
 /**
  * @brief backlog connections:
  * maximum length to which the queue of pending connections for sockfd may grow
