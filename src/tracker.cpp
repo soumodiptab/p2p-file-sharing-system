@@ -21,19 +21,6 @@ public:
         this->color_assignment = color_assignment;
     }
 };
-/**
- * @brief ip_addess | port | user_name | socket
- * 
- */
-class Peer
-{
-public:
-    string ip_address;
-    string port;
-    string user_name;
-    int socket_fd;
-    string listener_port;
-};
 class FileInfo
 {
 public:
@@ -226,7 +213,7 @@ public:
  * @brief <groupname,Group>
  * 
  */
-unordered_map<string, Group> group_list;
+map<string, Group> group_list;
 
 int get_current_socket()
 {
@@ -417,6 +404,26 @@ vector<string> list_files(vector<string> &tokens)
     }
     return reply_tokens;
 }
+vector<string> stop_share(vector<string> &tokens)
+{
+    string group_name = tokens[1];
+    string file_name = tokens[2];
+    string file_hash = generate_SHA1(file_name);
+    vector<string> reply_tokens = {command_print};
+    if (group_list.empty())
+    {
+        reply_tokens.push_back(reply_group_no_group);
+    }
+    if (group_list.find(group_name) == group_list.end())
+    {
+        reply_tokens.push_back(reply_group_not_exits);
+    }
+    else
+    {
+        reply_tokens.push_back(group_list[group_name].fetch_files());
+    }
+    return reply_tokens;
+}
 vector<string> upload_file(vector<string> &tokens)
 {
     string file_path = tokens[1];
@@ -446,6 +453,7 @@ vector<string> upload_file(vector<string> &tokens)
     }
     return reply_tokens;
 }
+
 void store_file_block_hash(vector<string> &tokens)
 {
     string group_name = tokens[1];
@@ -500,6 +508,8 @@ vector<string> process(vector<string> &tokens)
         reply = upload_file(tokens);
     else if (tokens[0] == command_list_files)
         reply = list_files(tokens);
+    else if (tokens[0] == command_stop_share)
+        reply = stop_share(tokens);
     return reply;
 }
 void post_process(vector<string> &tokens)

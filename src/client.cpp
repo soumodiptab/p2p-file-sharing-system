@@ -1,5 +1,6 @@
 #include "commons.h"
 pair<string, string> client_socket_listener;
+unordered_map<pthread_t, Peer> peer_list;
 pthread_t listener_thread;
 int client_fd;
 bool user_logged_in = false;
@@ -141,7 +142,18 @@ bool send_file_block_hash(int socket_fd, string file_hash)
 }
 void show_downloads()
 {
-    
+    if (!user_logged_in)
+    {
+        sync_print_ln("|| User is not logged in.");
+        return;
+    }
+    if (!downloads.empty() && !hosted_files.empty())
+    {
+        for (auto h : hosted_files)
+        {
+            sync_print_ln("");
+        }
+    }
 }
 bool validator(vector<string> tokens)
 {
@@ -254,11 +266,41 @@ void client_startup()
     }
     close(client_fd);
 }
+void process(vector<string> &tokens, Peer &peer)
+{
+    pthread_t worker_thread;
+
+    
+    log("Connection to peer established :" + peer_list[worker_thread].ip_address + " " + peer_list[worker_thread].port);
+}
 void *listener_startup(void *)
 {
     int listener_fd = server_setup(client_socket_listener);
+    while (true)
+    {
+        struct sockaddr_storage peer_address;
+        socklen_t peer_addr_size = sizeof(peer_address);
+        Peer new_peer = Peer();
+        new_peer.socket_fd = accept(listener_fd, (struct sockaddr *)&peer_address, &peer_addr_size);
+        if (new_peer.socket_fd == -1)
+        {
+            log("Unable to connect");
+            continue;
+        }
+        struct sockaddr_in peer_address_cast = *((struct sockaddr_in *)&peer_address);
+        new_peer.ip_address = inet_ntoa(peer_address_cast.sin_addr);
+        new_peer.port = to_string(ntohs(peer_address_cast.sin_port));
+        new_peer.listener_port = socket_recieve(new_peer.socket_fd);
+        int *fd = new int;
+        *fd = new_peer.socket_fd;
+
+        string command_message = socket_recieve(new_peer.socket_fd);
+        vector<string> command_message_tokens = unpack_message(command_message);
+        process(command_message_tokens, new_peer);
+    }
     close(listener_fd);
 }
+
 int main(int argc, char *argv[])
 {
     if (argc != 3)

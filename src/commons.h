@@ -20,7 +20,19 @@ using namespace std;
  * 1. socket connectivity using wrappers
  * 2. logging in console/logfile
  */
-
+/**
+ * @brief ip_addess | port | user_name | socket
+ * 
+ */
+class Peer
+{
+public:
+    string ip_address;
+    string port;
+    string user_name;
+    int socket_fd;
+    string listener_port;
+};
 /**
  * @brief ip | port
  * 
