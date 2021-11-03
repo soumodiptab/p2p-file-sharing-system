@@ -19,6 +19,7 @@ const string command_print = "print";
 const string command_change_color = "change_color";
 const string command_download_complete = "download_complete";
 const string command_send_block = "send_block";
+const string command_download_init = "download_init";
 
 const string constants_socket_failure = "Failed to open socket";
 const string constants_socket_binding_failure = "Failed to bind socket";
@@ -60,10 +61,15 @@ const string reply_user_login_incorrect = "Incorrect Password";
 const string reply_user_not_login = "User is not logged";
 const string reply_user_already_login = "User already logged in";
 const string reply_file_upload_complete = "File has been uploaded";
+const string reply_file_download_file_not_exists = "File does not exist";
+const string reply_file_download_file_uploader_offline = "File uploader is offline";
 const string reply_file_upload_recon_error = "File name is same but hash do not match, please change file name";
 const string reply_file_upload_recon_success = "File name is same and hashes have reconclied. User is added as a seeder to file";
+
 const string reply_NACK = "NACK";
 const string reply_ACK = "ACK";
+
+const int SHA_LENGTH = 40;
 /**
  * @brief backlog connections:
  * maximum length to which the queue of pending connections for sockfd may grow

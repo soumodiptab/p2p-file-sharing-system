@@ -369,6 +369,19 @@ bool file_query(string path)
     }
     return true;
 }
+bool directory_query(string path)
+{
+    struct stat entity;
+    if(stat(path.c_str(),&entity)==-1)
+    {
+        return false;
+    }
+    if(!S_ISDIR(entity.st_mode))
+    {
+        return false;
+    }
+    return true;
+}
 int get_file_size(string path)
 {
     struct stat entity;
@@ -380,14 +393,14 @@ int get_file_size(string path)
 }
 string generate_SHA1(const char *target, int size)
 {
-    unsigned char temp[SHA_DIGEST_LENGTH];
-    char buffer[SHA_DIGEST_LENGTH * 2];
-    memset(temp, 0x0, SHA_DIGEST_LENGTH);
-    memset(buffer, 0x0, SHA_DIGEST_LENGTH * 2);
-    SHA1((unsigned char *)target, size, temp);
+    unsigned char temp_buffer[SHA_DIGEST_LENGTH];
+    char buffer[SHA_LENGTH];
+    memset(temp_buffer, 0x0, SHA_DIGEST_LENGTH);
+    memset(buffer, 0x0, SHA_LENGTH);
+    SHA1((unsigned char *)target, size, temp_buffer);
     for (int i = 0; i < SHA_DIGEST_LENGTH; i++)
     {
-        sprintf((char *)&(buffer[i * 2]), "%02x", temp[i]);
+        sprintf((char *)&(buffer[i * 2]), "%02x", temp_buffer[i]);
     }
     string temp_hash(buffer);
     return temp_hash;

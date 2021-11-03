@@ -122,10 +122,8 @@ bool file_uploader(vector<string> &tokens)
     hosted_files[file.file_hash] = file;
     return true;
 }
-bool send_file_block_hash(int socket_fd, string file_hash)
+void send_file_block_hash(int socket_fd, string file_hash)
 {
-    if (hosted_files.find(file_hash) == hosted_files.end())
-        return false;
     FileInfo file = hosted_files[file_hash];
     socket_send(socket_fd, to_string(file.blocks));
     ack_recieve(socket_fd);
@@ -141,7 +139,7 @@ bool send_file_block_hash(int socket_fd, string file_hash)
 void file_upload_send(int socket_fd, string file_hash)
 {
     send_file_block_hash(socket_fd, file_hash);
-    sync_print_ln(">>" + socket_recieve(client_fd));
+    sync_print_ln(">>" + socket_recieve(socket_fd));
 }
 void file_upload_verify_send(int socket_fd, string file_hash)
 {
@@ -168,8 +166,19 @@ void show_downloads()
         }
     }
 }
+/**
+ * @brief <command><group_id><file_name><destination_path>
+ * 
+ * @param tokens 
+ * @return true 
+ * @return false 
+ */
 bool file_download_pre_verification(vector<string> &tokens)
 {
+    string destination_path=tokens[3];
+    if(!directory_query(destination_path))
+        return false;
+    return true;
 }
 bool validator(vector<string> tokens)
 {
@@ -250,6 +259,10 @@ void action(vector<string> tokens)
     {
         file_upload_verify_send(client_fd, tokens[2]);
     }
+    else if(tokens[0] == command_download_file)
+    {
+        
+    }
 }
 void client_startup()
 {
@@ -291,7 +304,6 @@ void client_startup()
 void process(vector<string> &tokens, Peer &peer)
 {
     pthread_t worker_thread;
-
     log("Connection to peer established :" + peer_list[worker_thread].ip_address + " " + peer_list[worker_thread].port);
 }
 void *listener_startup(void *)
@@ -311,13 +323,13 @@ void *listener_startup(void *)
         struct sockaddr_in peer_address_cast = *((struct sockaddr_in *)&peer_address);
         new_peer.ip_address = inet_ntoa(peer_address_cast.sin_addr);
         new_peer.port = to_string(ntohs(peer_address_cast.sin_port));
-        new_peer.listener_port = socket_recieve(new_peer.socket_fd);
         int *fd = new int;
         *fd = new_peer.socket_fd;
 
         string command_message = socket_recieve(new_peer.socket_fd);
         vector<string> command_message_tokens = unpack_message(command_message);
         process(command_message_tokens, new_peer);
+        socket_send(new_peer.socket_fd,"Dummy req test");
     }
     close(listener_fd);
 }

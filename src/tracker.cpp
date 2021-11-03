@@ -35,6 +35,13 @@ public:
     vector<string> block_hashes;
     vector<string> usernames;
 };
+class Download
+{
+public:
+    string file_hash;
+    string master_user;
+    vector<string> slave_users;
+};
 /**
  * @brief <username,User>
  * 
@@ -55,6 +62,7 @@ unordered_map<pthread_t, string> logged_user_threads;
  * 
  */
 unordered_map<pthread_t, Peer> peer_list;
+unordered_map<pthread_t, Download> ongoing_downloads;
 bool is_user_logged_in(string username)
 {
     if (logged_user_list.find(username) == logged_user_list.end())
@@ -453,7 +461,33 @@ vector<string> upload_file(vector<string> &tokens)
     }
     return reply_tokens;
 }
-
+vector<string> download_file_verification(vector<string> &tokens)
+{
+    string group_name = tokens[1];
+    string file_name = tokens[2];
+    string file_hash = generate_SHA1(file_name);
+    vector<string> reply_tokens;
+    if (group_list.find(group_name) == group_list.end())
+    {
+        reply_tokens = {command_print, reply_group_not_exits};
+    }
+    else if (!group_list[group_name].is_member(logged_user_threads[pthread_self()]))
+    {
+        reply_tokens = {command_print, reply_group_not_member};
+    }
+    else if (group_list[group_name].get_files().find(file_hash) == group_list[group_name].get_files().end()) //file does not exist
+    {
+        reply_tokens = {command_print, reply_file_download_file_not_exists};
+    }
+    else if (!group_list[group_name].is_uploader_online(file_hash)) //file is offline(user logged out)
+    {
+        reply_tokens = {command_print, reply_file_download_file_uploader_offline};
+    }
+    else
+    {
+        reply_tokens = {command_download_file, group_name, file_hash};
+    }
+}
 FileInfo store_file_block_hash(vector<string> &tokens)
 {
     string file_hash = tokens[2];
@@ -482,7 +516,6 @@ vector<string> upload_verify(vector<string> &tokens)
     FileInfo file = store_file_block_hash(tokens);
     FileInfo file_stored = group_list[group_name].get_files()[file.file_hash];
     bool flag = true;
-    ;
     if (file.block_hashes.size() == file_stored.block_hashes.size())
     {
         for (int i = 0; i < file.block_hashes.size(); i++)
@@ -520,8 +553,42 @@ vector<string> upload_process(vector<string> &tokens)
     group_list[group_name].add_file(file.file_hash, file);
     socket_send(get_current_socket(), reply_file_upload_complete);
 }
-vector<string> download_file_verification(vector<string> &tokens)
+void *download_service(void *)
 {
+    sleep(1);
+    Download &download = ongoing_downloads[pthread_self()];
+    Peer target = logged_user_list[download.master_user];
+    int target_user_fd = client_setup(make_pair(target.ip_address, target.listener_port));
+    vector<string> message_tokens = {command_download_init};
+    message_tokens.push_back(download.file_hash);
+    message_tokens.push_back(to_string(download.slave_users.size()));
+    for (auto u : download.slave_users)
+    {
+        Peer other_peer = logged_user_list[u];
+        message_tokens.push_back(other_peer.ip_address + ":" + other_peer.listener_port);
+    }
+    string message = pack_message(message_tokens);
+    socket_send(target_user_fd, message);
+    log("Sent DOWNLOAD REQ: " + message);
+    string reply = socket_recieve(target_user_fd);
+    log(reply);
+    ongoing_downloads.erase(pthread_self());
+    close(target_user_fd);
+}
+void download_process(vector<string> &tokens)
+{
+    string group_name = tokens[1];
+    string file_hash = tokens[2];
+    vector<string> users_with_file = group_list[group_name].find_uploaders_online(file_hash);
+    string user_download = logged_user_threads[pthread_self()];
+    Download new_download = Download();
+    new_download.file_hash = file_hash;
+    new_download.master_user = user_download;
+    new_download.slave_users = users_with_file;
+    pthread_t new_download_thread;
+    pthread_create(&new_download_thread, NULL, download_service, NULL);
+    log("Download request  has been sent for file : " + new_download.file_hash + "and user : " + new_download.master_user);
+    ongoing_downloads[new_download_thread] = new_download;
 }
 vector<string> process(vector<string> &tokens)
 {
@@ -569,6 +636,10 @@ void post_process(vector<string> &tokens)
     if (tokens[0] == command_upload_verify && tokens.size() == 3)
     {
         upload_verify(tokens);
+    }
+    if (tokens[0] == command_download_file && tokens.size() == 3)
+    {
+        download_process(tokens);
     }
 }
 void *thread_service(void *socket_fd)
