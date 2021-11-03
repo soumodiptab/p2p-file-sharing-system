@@ -4,16 +4,22 @@ unordered_map<pthread_t, Peer> peer_list;
 pthread_t listener_thread;
 int client_fd;
 bool user_logged_in = false;
+typedef struct T
+{
+    Peer peer;
+    vector<string> tokens;
+} ThreadInfo;
+pthread_mutex_t thread_info_maintainer;
 class FileInfo
 {
 public:
     string file_name;
     string file_hash;
     string path;
-    int file_descriptor;
     struct stat file_stat;
-    unsigned long long size;
+    unsigned int size;
     vector<pair<bool, string>> integrity;
+    vector<Peer> peer_list;
     int blocks;
     pthread_mutex_t file_sync;
     FileInfo(){};
@@ -30,20 +36,10 @@ public:
         integrity = vector<pair<bool, string>>(blocks, make_pair(0, ""));
         this->blocks = blocks;
     }
-    int open_file(int flag)
-    {
-        file_descriptor = open(path.c_str(), flag);
-        return file_descriptor;
-    }
-    int close_file()
-    {
-        close(file_descriptor);
-        return 0;
-    }
     void file_hash_generation()
     {
+        FILE *file_descriptor = fopen(path.c_str(), "r+");
         integrity.clear();
-        size = file_stat.st_size;
         int last_block_size = size;
         blocks = size / constants_file_block_size;
         if (size % constants_file_block_size)
@@ -55,16 +51,17 @@ public:
         for (int i = 1; i < blocks; i++)
         {
             char buffer[constants_file_block_size];
-            read(file_descriptor, buffer, constants_file_block_size);
+            fread(buffer, constants_file_block_size, constants_file_block_size, file_descriptor);
             string gen_hash = generate_SHA1(buffer, constants_file_block_size);
             log("block[" + to_string(i) + "] :" + gen_hash);
             integrity.push_back(make_pair(1, gen_hash));
         }
         char buffer[last_block_size];
-        read(file_descriptor, buffer, last_block_size);
+        fread(buffer, constants_file_block_size, constants_file_block_size, file_descriptor);
         string gen_hash = generate_SHA1(buffer, last_block_size);
         integrity.push_back(make_pair(1, gen_hash));
         log("block[" + to_string(blocks) + "] :" + gen_hash);
+        fclose(file_descriptor);
     }
     string get_bit_vector()
     {
@@ -88,13 +85,49 @@ public:
         integrity[block_id].second = generate_SHA1(buffer, size);
         pthread_mutex_unlock(&file_sync);
     }
+    int get_integrity()
+    {
+        pthread_mutex_lock(&file_sync);
+        int value = 0;
+        for (auto b : integrity)
+        {
+            if (b.first)
+                value++;
+        }
+        pthread_mutex_unlock(&file_sync);
+        return value;
+    }
+    bool check_integrity()
+    {
+        if (get_integrity() == blocks)
+            return true;
+        return false;
+    }
+    bool integrity_reconciliation(vector<string> hashes)
+    {
+        if (hashes.size() != blocks)
+            return false;
+        for (int i = 0; i < blocks; i++)
+        {
+            if (hashes[i] != integrity[i].second)
+                return false;
+        }
+        return true;
+    }
+};
+class Download
+{
+public:
+    FileInfo file_downloading;
+    FileInfo file_peer;
+    vector<Peer> peer_list;
 };
 /**
  * @brief <file_hash,FileInfo>
  * 
  */
 unordered_map<string, FileInfo> hosted_files;
-unordered_map<string, FileInfo> downloads;
+unordered_map<string, Download> downloads;
 bool file_uploader(vector<string> &tokens)
 {
     string path = tokens[1];
@@ -104,7 +137,7 @@ bool file_uploader(vector<string> &tokens)
         return false;
     }
     FileInfo file = FileInfo(path);
-    int file_descriptor = file.open_file(O_RDONLY);
+    int file_descriptor = open(path.c_str(), O_RDONLY);
     if (file_descriptor == -1)
     {
         sync_print_ln("|| Error in opening file");
@@ -117,7 +150,7 @@ bool file_uploader(vector<string> &tokens)
         sync_print_ln("|| Error fetching file stats");
         log("Error fetching file stats");
     }
-    file.file_stat = file_stats;
+    file.size = file_stats.st_size;
     file.file_hash_generation();
     hosted_files[file.file_hash] = file;
     return true;
@@ -125,16 +158,55 @@ bool file_uploader(vector<string> &tokens)
 void send_file_block_hash(int socket_fd, string file_hash)
 {
     FileInfo file = hosted_files[file_hash];
-    socket_send(socket_fd, to_string(file.blocks));
+    socket_send(socket_fd, to_string(file.blocks)); //blocks
     ack_recieve(socket_fd);
-    socket_send(socket_fd, file.file_name);
+    socket_send(socket_fd, file.file_name); //filename
     ack_recieve(socket_fd);
-    for (auto i : file.integrity)
+    for (auto i : file.integrity) //filehash
     {
         socket_send(socket_fd, i.second);
         ack_recieve(socket_fd);
     }
     ack_send(socket_fd);
+}
+void send_file_info(int socket_fd, FileInfo file)
+{
+    socket_send(socket_fd, file.file_name);
+    ack_recieve(socket_fd);
+    socket_send(socket_fd, file.file_hash);
+    ack_recieve(socket_fd);
+    socket_send(socket_fd, to_string(file.blocks));
+    ack_recieve(socket_fd);
+    socket_send(socket_fd, to_string(file.size));
+    ack_recieve(socket_fd);
+    for (int i = 0; i < file.blocks; i++)
+    {
+        socket_send(socket_fd, to_string((int)file.integrity[i].first));
+        ack_recieve(socket_fd);
+        socket_send(socket_fd, file.integrity[i].second);
+        ack_recieve(socket_fd);
+    }
+}
+FileInfo recieve_file_info(int socket_fd)
+{
+    FileInfo file = FileInfo();
+    file.file_name = socket_recieve(socket_fd);
+    ack_send(socket_fd);
+    file.file_hash = socket_recieve(socket_fd);
+    ack_send(socket_fd);
+    file.blocks = stoi(socket_recieve(socket_fd));
+    ack_send(socket_fd);
+    file.size = stoi(socket_recieve(socket_fd));
+    ack_send(socket_fd);
+    for (int i = 0; i < file.blocks; i++)
+    {
+        bool flag = stoi(socket_recieve(socket_fd));
+        ack_send(socket_fd);
+        string hash = socket_recieve(socket_fd);
+        ack_send(socket_fd);
+        file.integrity.push_back(make_pair(flag, hash));
+    }
+    return file;
 }
 void file_upload_send(int socket_fd, string file_hash)
 {
@@ -259,9 +331,9 @@ void action(vector<string> tokens)
     {
         file_upload_verify_send(client_fd, tokens[2]);
     }
-    else if (tokens[0] == command_download_file && tokens.size() == 4)
+    else if (tokens[0] == command_download_file && tokens.size() == 6)
     {
-        sync_print_ln(">>" + tokens[]);
+        sync_print_ln(">>" + tokens[5]);
     }
 }
 void client_startup()
@@ -301,11 +373,99 @@ void client_startup()
     }
     close(client_fd);
 }
-void process(vector<string> &tokens, Peer &peer)
+void *download_start(void *arg)
 {
+    pthread_mutex_lock(&thread_info_maintainer);
+    pthread_mutex_unlock(&thread_info_maintainer);
+    ThreadInfo info = *((ThreadInfo *)arg);
+    try
+    {
+        string file_name = info.tokens[1];
+        string file_hash = info.tokens[2];
+        string file_path = info.tokens[3];
+        int number_of_peers = stoi(info.tokens[4]);
+        Download new_download = Download();
+        for (int i = 1; i <= number_of_peers; i++)
+        {
+            pair<string, string> socket = read_socket_input(info.tokens[3 + i]);
+            Peer new_peer = Peer();
+            new_peer.ip_address = socket.first;
+            new_peer.listener_port = socket.second;
+            new_download.peer_list.push_back(new_peer);
+        }
+        int socket_fd = client_setup(make_pair(new_download.peer_list[0].ip_address, new_download.peer_list[0].listener_port));
+        vector<string> command_tokens = {command_fetch_file_info, file_hash};
+        socket_send(socket_fd, pack_message(command_tokens));
+        FileInfo to_download = recieve_file_info(socket_fd);
+        close(socket_fd);
+        unsigned int size = to_download.size;
+
+        socket_send(info.peer.socket_fd, "Download Complete");
+    }
+    catch (string error)
+    {
+        log(error);
+    }
+    peer_list.erase(pthread_self());
+}
+void *send_blocks(void *arg)
+{
+    pthread_mutex_lock(&thread_info_maintainer);
+    pthread_mutex_unlock(&thread_info_maintainer);
+    ThreadInfo info = *((ThreadInfo *)arg);
+    try
+    {
+        string file_name = info.tokens[1];
+        string file_hash = info.tokens[2];
+        int start_block_index = stoi(info.tokens[2]);
+        int end_block_index = stoi(info.tokens[3]);
+        FileInfo file = hosted_files[file_hash];
+    }
+    catch (string error)
+    {
+        log(error);
+    }
+    peer_list.erase(pthread_self());
+}
+void *fetch_file_info(void *arg)
+{
+    pthread_mutex_lock(&thread_info_maintainer);
+    pthread_mutex_unlock(&thread_info_maintainer);
+    ThreadInfo info = *((ThreadInfo *)arg);
+    try
+    {
+        string file_hash = info.tokens[2];
+        FileInfo file = hosted_files[file_hash];
+        send_file_info(info.peer.socket_fd, file);
+    }
+    catch (string error)
+    {
+        log(error);
+    }
+    peer_list.erase(pthread_self());
+}
+void process(vector<string> tokens, Peer peer)
+{
+    ThreadInfo *info = (ThreadInfo *)malloc(sizeof(ThreadInfo));
+    info->peer = peer;
+    info->tokens = tokens;
     pthread_t worker_thread;
+    pthread_mutex_lock(&thread_info_maintainer);
     if (tokens[0] == command_download_init)
-        log("Connection to peer established :" + peer_list[worker_thread].ip_address + " " + peer_list[worker_thread].port);
+    {
+        pthread_create(&worker_thread, NULL, download_start, info);
+    }
+    else if (tokens[0] == command_send_block)
+    {
+        pthread_create(&worker_thread, NULL, send_blocks, info);
+    }
+    else if (tokens[0] == command_fetch_file_info)
+    {
+        pthread_create(&worker_thread, NULL, fetch_file_info, info);
+    }
+    log("Connection to peer established :" + peer_list[worker_thread].ip_address + " " + peer_list[worker_thread].port);
+    peer_list[worker_thread] = peer;
+    pthread_mutex_unlock(&thread_info_maintainer);
 }
 void *listener_startup(void *)
 {
@@ -326,11 +486,9 @@ void *listener_startup(void *)
         new_peer.port = to_string(ntohs(peer_address_cast.sin_port));
         int *fd = new int;
         *fd = new_peer.socket_fd;
-
         string command_message = socket_recieve(new_peer.socket_fd);
         vector<string> command_message_tokens = unpack_message(command_message);
         process(command_message_tokens, new_peer);
-        socket_send(new_peer.socket_fd, "Dummy req test");
     }
     close(listener_fd);
 }

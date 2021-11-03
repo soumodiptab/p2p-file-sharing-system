@@ -38,7 +38,9 @@ public:
 class Download
 {
 public:
+    string file_name;
     string file_hash;
+    string target_path;
     string master_user;
     vector<string> slave_users;
 };
@@ -487,7 +489,7 @@ vector<string> download_file_verification(vector<string> &tokens)
     }
     else
     {
-        reply_tokens = {command_download_file, group_name, file_hash, path, reply_file_download_started};
+        reply_tokens = {command_download_file, file_name, group_name, file_hash, path, reply_file_download_started};
     }
     return reply_tokens;
 }
@@ -564,7 +566,9 @@ void *download_service(void *)
     Peer target = logged_user_list[download.master_user];
     int target_user_fd = client_setup(make_pair(target.ip_address, target.listener_port));
     vector<string> message_tokens = {command_download_init};
+    message_tokens.push_back(download.file_name);
     message_tokens.push_back(download.file_hash);
+    message_tokens.push_back(download.target_path);
     message_tokens.push_back(to_string(download.slave_users.size()));
     for (auto u : download.slave_users)
     {
@@ -581,13 +585,15 @@ void *download_service(void *)
 }
 void download_process(vector<string> &tokens)
 {
-    string group_name = tokens[1];
-    string file_hash = tokens[2];
+    string group_name = tokens[2];
+    string file_hash = tokens[3];
     vector<string> users_with_file = group_list[group_name].find_uploaders_online(file_hash);
     string user_download = logged_user_threads[pthread_self()];
     Download new_download = Download();
     new_download.file_hash = file_hash;
+    new_download.file_name = tokens[1];
     new_download.master_user = user_download;
+    new_download.target_path = tokens[4];
     new_download.slave_users = users_with_file;
     pthread_t new_download_thread;
     pthread_mutex_lock(&download_mutex);
