@@ -269,7 +269,12 @@ string socket_recieve(int socket_fd)
  */
 int ack_send(int socket_fd)
 {
-    string ack = "ACK";
+    string ack = reply_ACK;
+    return socket_send(socket_fd, ack);
+}
+int nack_send(int socket_fd)
+{
+    string ack = reply_NACK;
     return socket_send(socket_fd, ack);
 }
 /**
@@ -385,8 +390,7 @@ string generate_SHA1(const char *target, int size)
         sprintf((char *)&(buffer[i * 2]), "%02x", temp[i]);
     }
     string temp_hash(buffer);
-    string final_hash = temp_hash.substr(0, SHA_DIGEST_LENGTH);
-    return final_hash;
+    return temp_hash;
 }
 string generate_SHA1(string message)
 {

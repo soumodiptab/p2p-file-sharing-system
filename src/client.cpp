@@ -137,8 +137,21 @@ bool send_file_block_hash(int socket_fd, string file_hash)
         ack_recieve(socket_fd);
     }
     ack_send(socket_fd);
+}
+void file_upload_send(int socket_fd, string file_hash)
+{
+    send_file_block_hash(socket_fd, file_hash);
+    sync_print_ln(">>" + socket_recieve(client_fd));
+}
+void file_upload_verify_send(int socket_fd, string file_hash)
+{
+    send_file_block_hash(socket_fd,file_hash);
+    if (ack_recieve(socket_fd)==reply_NACK)
+    {
+        hosted_files.erase(file_hash);
+    }
+    ack_send(socket_fd);
     sync_print_ln(">>" + socket_recieve(socket_fd));
-    return true;
 }
 void show_downloads()
 {
@@ -154,6 +167,9 @@ void show_downloads()
             sync_print_ln("");
         }
     }
+}
+bool file_download_pre_verification(vector<string> &tokens)
+{
 }
 bool validator(vector<string> tokens)
 {
@@ -185,6 +201,8 @@ bool validator(vector<string> tokens)
         return true;
     else if (tokens[0] == command_show_downloads && tokens.size() == 1)
         return true;
+    else if (tokens[0] == command_download_file && tokens.size() == 4)
+        return file_download_pre_verification(tokens);
     else
     {
         sync_print_ln("||Invalid command");
@@ -217,9 +235,9 @@ void action(vector<string> tokens)
     {
         if (tokens.size() == 3)
         {
-            send_file_block_hash(client_fd, tokens[2]);
+            file_upload_send(client_fd, tokens[2]);
         }
-        else
+        else if (tokens.size() == 4)
         {
             if (!stoi(tokens[1]))
             {
@@ -227,6 +245,10 @@ void action(vector<string> tokens)
                 sync_print_ln(">>" + tokens[3]);
             }
         }
+    }
+    else if (tokens[0] == command_upload_verify && tokens.size() == 3)
+    {
+        file_upload_verify_send(client_fd, tokens[2]);
     }
 }
 void client_startup()
@@ -270,7 +292,6 @@ void process(vector<string> &tokens, Peer &peer)
 {
     pthread_t worker_thread;
 
-    
     log("Connection to peer established :" + peer_list[worker_thread].ip_address + " " + peer_list[worker_thread].port);
 }
 void *listener_startup(void *)

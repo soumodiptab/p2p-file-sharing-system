@@ -13,8 +13,7 @@ string generate_SHA1(const char *target, int size)
         sprintf((char *)&(buffer[i * 2]), "%02x", temp[i]);
     }
     string temp_hash(buffer);
-    string final_hash = temp_hash.substr(0, SHA_DIGEST_LENGTH);
-    return final_hash;
+    return temp_hash;
 }
 string generate_SHA1(string message)
 {
@@ -39,6 +38,6 @@ int main()
     }
 
     printf("SHA1 of %s is %s\n", s.c_str(), buf);
-    cout << generate_SHA1(s) << endl;
+    cout << generate_SHA1(s).size() << endl;
     return 0;
 }

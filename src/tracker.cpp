@@ -159,7 +159,7 @@ public:
     {
         return join_requests;
     }
-    unordered_map<string, FileInfo> get_files()
+    unordered_map<string, FileInfo> &get_files()
     {
         return file_list;
     }
@@ -445,7 +445,7 @@ vector<string> upload_file(vector<string> &tokens)
     }
     else if (group_list[group_name].get_files().find(file_hash) != group_list[group_name].get_files().end()) //file already present check integrity
     {
-        reply_tokens = {command_upload_verify};
+        reply_tokens = {command_upload_verify, group_name, file_hash};
     }
     else // new file
     {
@@ -454,9 +454,8 @@ vector<string> upload_file(vector<string> &tokens)
     return reply_tokens;
 }
 
-void store_file_block_hash(vector<string> &tokens)
+FileInfo store_file_block_hash(vector<string> &tokens)
 {
-    string group_name = tokens[1];
     string file_hash = tokens[2];
     int blocks = stoi(socket_recieve(get_current_socket()));
     ack_send(get_current_socket());
@@ -475,10 +474,55 @@ void store_file_block_hash(vector<string> &tokens)
         log("Block[" + to_string(i) + "]:" + hash_block);
     }
     ack_recieve(get_current_socket());
-    group_list[group_name].add_file(file_hash, file);
+    return file;
+}
+vector<string> upload_verify(vector<string> &tokens)
+{
+    string group_name = tokens[1];
+    FileInfo file = store_file_block_hash(tokens);
+    FileInfo file_stored = group_list[group_name].get_files()[file.file_hash];
+    bool flag = true;
+    ;
+    if (file.block_hashes.size() == file_stored.block_hashes.size())
+    {
+        for (int i = 0; i < file.block_hashes.size(); i++)
+        {
+            if (file.block_hashes[i] != file_stored.block_hashes[i])
+            {
+                flag = false;
+                break;
+            }
+        }
+    }
+    else
+    {
+        flag = false;
+    }
+    string reply;
+    if (flag)
+    {
+        group_list[group_name].get_files()[file.file_hash].usernames.push_back(logged_user_threads[pthread_self()]);
+        reply = reply_file_upload_recon_success;
+        ack_send(get_current_socket());
+    }
+    else
+    {
+        reply = reply_file_upload_recon_error;
+        nack_send(get_current_socket());
+    }
+    ack_recieve(get_current_socket());
+    socket_send(get_current_socket(), reply);
+}
+vector<string> upload_process(vector<string> &tokens)
+{
+    string group_name = tokens[1];
+    FileInfo file = store_file_block_hash(tokens);
+    group_list[group_name].add_file(file.file_hash, file);
     socket_send(get_current_socket(), reply_file_upload_complete);
 }
-
+vector<string> download_file_verification(vector<string> &tokens)
+{
+}
 vector<string> process(vector<string> &tokens)
 {
     vector<string> reply = {command_print, reply_default};
@@ -510,6 +554,8 @@ vector<string> process(vector<string> &tokens)
         reply = list_files(tokens);
     else if (tokens[0] == command_stop_share)
         reply = stop_share(tokens);
+    else if (tokens[0] == command_download_file)
+        reply = download_file_verification(tokens);
     return reply;
 }
 void post_process(vector<string> &tokens)
@@ -518,7 +564,11 @@ void post_process(vector<string> &tokens)
         return;
     if (tokens[0] == command_upload_file && tokens.size() == 3)
     {
-        store_file_block_hash(tokens);
+        upload_process(tokens);
+    }
+    if (tokens[0] == command_upload_verify && tokens.size() == 3)
+    {
+        upload_verify(tokens);
     }
 }
 void *thread_service(void *socket_fd)
