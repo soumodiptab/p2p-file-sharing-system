@@ -143,8 +143,8 @@ void file_upload_send(int socket_fd, string file_hash)
 }
 void file_upload_verify_send(int socket_fd, string file_hash)
 {
-    send_file_block_hash(socket_fd,file_hash);
-    if (ack_recieve(socket_fd)==reply_NACK)
+    send_file_block_hash(socket_fd, file_hash);
+    if (ack_recieve(socket_fd) == reply_NACK)
     {
         hosted_files.erase(file_hash);
     }
@@ -175,8 +175,8 @@ void show_downloads()
  */
 bool file_download_pre_verification(vector<string> &tokens)
 {
-    string destination_path=tokens[3];
-    if(!directory_query(destination_path))
+    string destination_path = tokens[3];
+    if (!directory_query(destination_path))
         return false;
     return true;
 }
@@ -214,7 +214,7 @@ bool validator(vector<string> tokens)
         return file_download_pre_verification(tokens);
     else
     {
-        sync_print_ln("||Invalid command");
+        sync_print_ln("||Invalid command/parameter");
         return false;
     }
 }
@@ -259,9 +259,9 @@ void action(vector<string> tokens)
     {
         file_upload_verify_send(client_fd, tokens[2]);
     }
-    else if(tokens[0] == command_download_file)
+    else if (tokens[0] == command_download_file && tokens.size() == 4)
     {
-        
+        sync_print_ln(">>" + tokens[]);
     }
 }
 void client_startup()
@@ -304,7 +304,8 @@ void client_startup()
 void process(vector<string> &tokens, Peer &peer)
 {
     pthread_t worker_thread;
-    log("Connection to peer established :" + peer_list[worker_thread].ip_address + " " + peer_list[worker_thread].port);
+    if (tokens[0] == command_download_init)
+        log("Connection to peer established :" + peer_list[worker_thread].ip_address + " " + peer_list[worker_thread].port);
 }
 void *listener_startup(void *)
 {
@@ -329,7 +330,7 @@ void *listener_startup(void *)
         string command_message = socket_recieve(new_peer.socket_fd);
         vector<string> command_message_tokens = unpack_message(command_message);
         process(command_message_tokens, new_peer);
-        socket_send(new_peer.socket_fd,"Dummy req test");
+        socket_send(new_peer.socket_fd, "Dummy req test");
     }
     close(listener_fd);
 }

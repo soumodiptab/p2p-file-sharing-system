@@ -372,11 +372,11 @@ bool file_query(string path)
 bool directory_query(string path)
 {
     struct stat entity;
-    if(stat(path.c_str(),&entity)==-1)
+    if (stat(path.c_str(), &entity) == -1)
     {
         return false;
     }
-    if(!S_ISDIR(entity.st_mode))
+    if (!S_ISDIR(entity.st_mode))
     {
         return false;
     }

@@ -63,6 +63,7 @@ unordered_map<pthread_t, string> logged_user_threads;
  */
 unordered_map<pthread_t, Peer> peer_list;
 unordered_map<pthread_t, Download> ongoing_downloads;
+pthread_mutex_t download_mutex;
 bool is_user_logged_in(string username)
 {
     if (logged_user_list.find(username) == logged_user_list.end())
@@ -465,6 +466,7 @@ vector<string> download_file_verification(vector<string> &tokens)
 {
     string group_name = tokens[1];
     string file_name = tokens[2];
+    string path = tokens[3];
     string file_hash = generate_SHA1(file_name);
     vector<string> reply_tokens;
     if (group_list.find(group_name) == group_list.end())
@@ -485,8 +487,9 @@ vector<string> download_file_verification(vector<string> &tokens)
     }
     else
     {
-        reply_tokens = {command_download_file, group_name, file_hash};
+        reply_tokens = {command_download_file, group_name, file_hash, path, reply_file_download_started};
     }
+    return reply_tokens;
 }
 FileInfo store_file_block_hash(vector<string> &tokens)
 {
@@ -510,7 +513,7 @@ FileInfo store_file_block_hash(vector<string> &tokens)
     ack_recieve(get_current_socket());
     return file;
 }
-vector<string> upload_verify(vector<string> &tokens)
+void upload_verify(vector<string> &tokens)
 {
     string group_name = tokens[1];
     FileInfo file = store_file_block_hash(tokens);
@@ -546,7 +549,7 @@ vector<string> upload_verify(vector<string> &tokens)
     ack_recieve(get_current_socket());
     socket_send(get_current_socket(), reply);
 }
-vector<string> upload_process(vector<string> &tokens)
+void upload_process(vector<string> &tokens)
 {
     string group_name = tokens[1];
     FileInfo file = store_file_block_hash(tokens);
@@ -555,7 +558,8 @@ vector<string> upload_process(vector<string> &tokens)
 }
 void *download_service(void *)
 {
-    sleep(1);
+    pthread_mutex_lock(&download_mutex);
+    pthread_mutex_unlock(&download_mutex);
     Download &download = ongoing_downloads[pthread_self()];
     Peer target = logged_user_list[download.master_user];
     int target_user_fd = client_setup(make_pair(target.ip_address, target.listener_port));
@@ -586,9 +590,11 @@ void download_process(vector<string> &tokens)
     new_download.master_user = user_download;
     new_download.slave_users = users_with_file;
     pthread_t new_download_thread;
+    pthread_mutex_lock(&download_mutex);
     pthread_create(&new_download_thread, NULL, download_service, NULL);
     log("Download request  has been sent for file : " + new_download.file_hash + "and user : " + new_download.master_user);
     ongoing_downloads[new_download_thread] = new_download;
+    pthread_mutex_unlock(&download_mutex);
 }
 vector<string> process(vector<string> &tokens)
 {

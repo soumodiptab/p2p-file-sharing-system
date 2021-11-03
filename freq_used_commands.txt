@@ -1,1 +1,10 @@
+create_user u1 p1
+login u1 p1
+create_group g1
+accept_request g1 u2
 upload_file /home/soumodiptab/repo/p2p-mini-torrent-client/client1/file1.txt g1
+
+create_user u2 p2
+login u2 p2
+join_group g1
+download_file g1 file1.txt /home/soumodiptab/repo/p2p-mini-torrent-client/client2_download

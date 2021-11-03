@@ -63,6 +63,7 @@ const string reply_user_already_login = "User already logged in";
 const string reply_file_upload_complete = "File has been uploaded";
 const string reply_file_download_file_not_exists = "File does not exist";
 const string reply_file_download_file_uploader_offline = "File uploader is offline";
+const string reply_file_download_started = "File has started downloading in the background";
 const string reply_file_upload_recon_error = "File name is same but hash do not match, please change file name";
 const string reply_file_upload_recon_success = "File name is same and hashes have reconclied. User is added as a seeder to file";
 
