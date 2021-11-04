@@ -18,7 +18,7 @@ const string command_stop_share = "stop_share";
 const string command_print = "print";
 const string command_change_color = "change_color";
 const string command_download_complete = "download_complete";
-const string command_send_block = "send_blocks";
+const string command_send_blocks = "send_blocks";
 const string command_download_init = "download_init";
 const string command_fetch_file_info = "fetch_file";
 
@@ -67,6 +67,8 @@ const string reply_file_download_file_uploader_offline = "File uploader is offli
 const string reply_file_download_started = "File has started downloading in the background";
 const string reply_file_upload_recon_error = "File name is same but hash do not match, please change file name";
 const string reply_file_upload_recon_success = "File name is same and hashes have reconclied. User is added as a seeder to file";
+const string reply_download_status_SUCCESS="Download successfully completed";
+const string reply_download_status_FAILURE="Download failed";
 
 const string reply_NACK = "NACK";
 const string reply_ACK = "ACK";

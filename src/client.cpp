@@ -16,10 +16,15 @@ public:
     string file_name;
     string file_hash;
     string path;
-    struct stat file_stat;
     unsigned int size;
+    int last_block_size;
     vector<pair<bool, string>> integrity;
-    vector<Peer> peer_list;
+    vector<Peer> peers;
+    /**
+     * @brief 0-seeding 1-downloading 2-seeding+downloaded
+     * 
+     */
+    int status;
     int blocks;
     pthread_mutex_t file_sync;
     FileInfo(){};
@@ -33,14 +38,19 @@ public:
     {
         this->file_name = extract_file_name(path);
         this->path = path;
-        integrity = vector<pair<bool, string>>(blocks, make_pair(0, ""));
+        this->file_hash = generate_SHA1(file_name);
+        integrity = vector<pair<bool, string>>(blocks, make_pair(false, ""));
         this->blocks = blocks;
     }
     void file_hash_generation()
     {
-        FILE *file_descriptor = fopen(path.c_str(), "r+");
+        fstream file_descriptor;
+        file_descriptor.open(path, ios::in | ios::binary);
         integrity.clear();
-        int last_block_size = size;
+        file_descriptor.seekg(0, ios::end);
+        size = file_descriptor.tellg();
+        file_descriptor.seekg(0, ios::beg);
+        last_block_size = size;
         blocks = size / constants_file_block_size;
         if (size % constants_file_block_size)
         {
@@ -51,17 +61,18 @@ public:
         for (int i = 1; i < blocks; i++)
         {
             char buffer[constants_file_block_size];
-            fread(buffer, constants_file_block_size, constants_file_block_size, file_descriptor);
+            file_descriptor.read(buffer, constants_file_block_size);
             string gen_hash = generate_SHA1(buffer, constants_file_block_size);
             log("block[" + to_string(i) + "] :" + gen_hash);
             integrity.push_back(make_pair(1, gen_hash));
         }
         char buffer[last_block_size];
-        fread(buffer, constants_file_block_size, constants_file_block_size, file_descriptor);
+        file_descriptor.read(buffer, last_block_size);
         string gen_hash = generate_SHA1(buffer, last_block_size);
         integrity.push_back(make_pair(1, gen_hash));
         log("block[" + to_string(blocks) + "] :" + gen_hash);
-        fclose(file_descriptor);
+        status = 0;
+        file_descriptor.close();
     }
     string get_bit_vector()
     {
@@ -103,31 +114,32 @@ public:
             return true;
         return false;
     }
-    bool integrity_reconciliation(vector<string> hashes)
+    int get_percentage()
     {
-        if (hashes.size() != blocks)
+        int val = get_integrity();
+        int perc = (val / blocks) * 100;
+        return perc;
+    }
+    bool integrity_reconciliation(FileInfo file)
+    {
+        if (file.integrity.size() != blocks)
             return false;
         for (int i = 0; i < blocks; i++)
         {
-            if (hashes[i] != integrity[i].second)
+            if (file.integrity[i].second != integrity[i].second || file.integrity[i].first != integrity[i].first)
+            {
+                log("Block [" + to_string(i + 1) + "]" + "Mismatch hash : [" + file.integrity[i].second + "] [" + integrity[i].second + "]");
                 return false;
+            }
         }
         return true;
     }
-};
-class Download
-{
-public:
-    FileInfo file_downloading;
-    FileInfo file_peer;
-    vector<Peer> peer_list;
 };
 /**
  * @brief <file_hash,FileInfo>
  * 
  */
 unordered_map<string, FileInfo> hosted_files;
-unordered_map<string, Download> downloads;
 bool file_uploader(vector<string> &tokens)
 {
     string path = tokens[1];
@@ -137,20 +149,6 @@ bool file_uploader(vector<string> &tokens)
         return false;
     }
     FileInfo file = FileInfo(path);
-    int file_descriptor = open(path.c_str(), O_RDONLY);
-    if (file_descriptor == -1)
-    {
-        sync_print_ln("|| Error in opening file");
-        log("Error in opening file");
-        return false;
-    }
-    struct stat file_stats;
-    if (fstat(file_descriptor, &file_stats) == -1)
-    {
-        sync_print_ln("|| Error fetching file stats");
-        log("Error fetching file stats");
-    }
-    file.size = file_stats.st_size;
     file.file_hash_generation();
     hosted_files[file.file_hash] = file;
     return true;
@@ -179,6 +177,8 @@ void send_file_info(int socket_fd, FileInfo file)
     ack_recieve(socket_fd);
     socket_send(socket_fd, to_string(file.size));
     ack_recieve(socket_fd);
+    socket_send(socket_fd, to_string(file.last_block_size));
+    ack_recieve(socket_fd);
     for (int i = 0; i < file.blocks; i++)
     {
         socket_send(socket_fd, to_string((int)file.integrity[i].first));
@@ -197,6 +197,8 @@ FileInfo recieve_file_info(int socket_fd)
     file.blocks = stoi(socket_recieve(socket_fd));
     ack_send(socket_fd);
     file.size = stoi(socket_recieve(socket_fd));
+    ack_send(socket_fd);
+    file.last_block_size = stoi(socket_recieve(socket_fd));
     ack_send(socket_fd);
     for (int i = 0; i < file.blocks; i++)
     {
@@ -230,7 +232,7 @@ void show_downloads()
         sync_print_ln("|| User is not logged in.");
         return;
     }
-    if (!downloads.empty() && !hosted_files.empty())
+    if (!hosted_files.empty())
     {
         for (auto h : hosted_files)
         {
@@ -373,6 +375,68 @@ void client_startup()
     }
     close(client_fd);
 }
+void *write_blocks(void *arg)
+{
+    ThreadInfo info = *((ThreadInfo *)arg);
+    string file_hash = info.tokens[1];
+    int start_index = stoi(info.tokens[2]);
+    int blocks_write = stoi(info.tokens[3]);
+    bool last_block = stoi(info.tokens[4]);
+    int socket_fd = client_setup(make_pair(info.peer.ip_address, info.peer.listener_port));
+    string command = pack_message(info.tokens);
+    socket_send(socket_fd, command);
+    FileInfo &download_file = hosted_files[file_hash];
+    fstream file;
+    file.open(download_file.path, ios::binary | ios::out | ios::in);
+    file.seekg(start_index, ios::beg);
+    for (int i = 0; i < blocks_write; i++)
+    {
+        int bytes_to_write = stoi(socket_recieve(socket_fd));
+        ack_send(socket_fd);
+        char *buffer = new char[bytes_to_write];
+        bzero(buffer, 0);
+        read(socket_fd, buffer, bytes_to_write);
+        file.write(buffer, bytes_to_write);
+        download_file.set_hash(start_index + i, buffer, bytes_to_write);
+        ack_send(socket_fd);
+    }
+    file.close();
+    close(socket_fd);
+}
+void *send_blocks(void *arg)
+{
+    pthread_mutex_lock(&thread_info_maintainer);
+    pthread_mutex_unlock(&thread_info_maintainer);
+    ThreadInfo info = *((ThreadInfo *)arg);
+    try
+    {
+        string file_hash = info.tokens[1];
+        int start_index = stoi(info.tokens[2]);
+        int blocks_read = stoi(info.tokens[3]);
+        bool last_block = stoi(info.tokens[4]);
+        FileInfo seed_file = hosted_files[file_hash];
+        fstream file;
+        file.open(seed_file.path, ios::binary | ios::in);
+        file.seekg(start_index, ios::beg);
+        for (int i = start_index; i < start_index + blocks_read; i++)
+        {
+
+            char *buffer = new char[constants_file_block_size];
+            bzero(buffer, 0);
+            file.read(buffer, constants_file_block_size);
+            socket_send(info.peer.socket_fd, to_string(file.gcount()));
+            ack_recieve(info.peer.socket_fd);
+            write(info.peer.socket_fd, buffer, constants_file_block_size);
+            ack_recieve(info.peer.socket_fd);
+        }
+        file.close();
+    }
+    catch (string error)
+    {
+        log(error);
+    }
+    peer_list.erase(pthread_self());
+}
 void *download_start(void *arg)
 {
     pthread_mutex_lock(&thread_info_maintainer);
@@ -384,42 +448,64 @@ void *download_start(void *arg)
         string file_hash = info.tokens[2];
         string file_path = info.tokens[3];
         int number_of_peers = stoi(info.tokens[4]);
-        Download new_download = Download();
+        vector<Peer> peers;
         for (int i = 1; i <= number_of_peers; i++)
         {
             pair<string, string> socket = read_socket_input(info.tokens[3 + i]);
             Peer new_peer = Peer();
             new_peer.ip_address = socket.first;
             new_peer.listener_port = socket.second;
-            new_download.peer_list.push_back(new_peer);
+            peers.push_back(new_peer);
         }
-        int socket_fd = client_setup(make_pair(new_download.peer_list[0].ip_address, new_download.peer_list[0].listener_port));
+        int socket_fd = client_setup(make_pair(peers[0].ip_address, peers[0].listener_port));
         vector<string> command_tokens = {command_fetch_file_info, file_hash};
         socket_send(socket_fd, pack_message(command_tokens));
         FileInfo to_download = recieve_file_info(socket_fd);
         close(socket_fd);
-        unsigned int size = to_download.size;
-
-        socket_send(info.peer.socket_fd, "Download Complete");
-    }
-    catch (string error)
-    {
-        log(error);
-    }
-    peer_list.erase(pthread_self());
-}
-void *send_blocks(void *arg)
-{
-    pthread_mutex_lock(&thread_info_maintainer);
-    pthread_mutex_unlock(&thread_info_maintainer);
-    ThreadInfo info = *((ThreadInfo *)arg);
-    try
-    {
-        string file_name = info.tokens[1];
-        string file_hash = info.tokens[2];
-        int start_block_index = stoi(info.tokens[2]);
-        int end_block_index = stoi(info.tokens[3]);
-        FileInfo file = hosted_files[file_hash];
+        file_path.append(file_name);
+        FileInfo target_file = FileInfo(file_path, to_download.blocks);
+        target_file.size = to_download.size;
+        target_file.size = to_download.size;
+        hosted_files[file_hash] = target_file;
+        create_dummy_file(target_file.path, to_download.size);
+        int allocation = to_download.blocks / number_of_peers;
+        pthread_t download_threads[number_of_peers];
+        int total = to_download.blocks;
+        int start = 0;
+        hosted_files[file_hash].status = 1;
+        for (int i = 0; i < number_of_peers; i++)
+        {
+            int current_alloc = allocation;
+            bool flag_last_block = false;
+            if (i == number_of_peers - 1)
+            {
+                current_alloc = total;
+                total = 0;
+                flag_last_block = true;
+            }
+            total -= current_alloc;
+            vector<string> command_tokens = {command_send_blocks, file_hash, to_string(start), to_string(current_alloc), to_string((int)flag_last_block)};
+            start += current_alloc;
+            ThreadInfo *new_info = (ThreadInfo *)malloc(sizeof(ThreadInfo));
+            new_info->tokens = command_tokens;
+            new_info->peer = peers[i];
+            pthread_create(&download_threads[i], NULL, write_blocks, new_info);
+        }
+        for (int i = 0; i < number_of_peers; i++)
+        {
+            pthread_join(download_threads[i], NULL);
+        }
+        if (!hosted_files[file_hash].integrity_reconciliation(to_download))
+        {
+            log("Download failed file integrity compromised");
+            hosted_files.erase(file_hash);
+            socket_send(info.peer.socket_fd, reply_download_status_FAILURE);
+        }
+        else
+        {
+            hosted_files[file_hash].status = 2;
+            socket_send(info.peer.socket_fd, reply_download_status_SUCCESS);
+        }
     }
     catch (string error)
     {
@@ -455,7 +541,7 @@ void process(vector<string> tokens, Peer peer)
     {
         pthread_create(&worker_thread, NULL, download_start, info);
     }
-    else if (tokens[0] == command_send_block)
+    else if (tokens[0] == command_send_blocks)
     {
         pthread_create(&worker_thread, NULL, send_blocks, info);
     }

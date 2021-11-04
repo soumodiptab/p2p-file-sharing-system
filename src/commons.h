@@ -112,12 +112,12 @@ void sync_print(string message)
 void write_to_log(const std::string &message)
 {
     pthread_mutex_lock(&log_mutex);
-    ofstream file_out;
-    file_out.open(log_file, std::ios_base::app);
+    fstream file_out;
+    file_out.open(log_file, ios::out | ios::app);
     file_out << message << endl;
+    file_out.close();
     pthread_mutex_unlock(&log_mutex);
 }
-
 /**
  * @brief Selects between displaying log on console/log file
  * 
@@ -413,4 +413,13 @@ string extract_file_name(string &path)
 {
     string file_name = path.substr(path.find_last_of('/') + 1, path.size() - path.find_last_of('/') + 1);
     return file_name;
+}
+void create_dummy_file(string path, int size)
+{
+    fstream file;
+    file.open(path, ios::out | ios::binary | ios::trunc);
+    file.seekp(size - 1, ios::end);
+    file.put('\0');
+    file.close();
+    log("Dummy file of size :" + to_string(size) + " created.");
 }

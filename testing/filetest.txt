@@ -1,4 +1,4 @@
-You will occasionally want to access two resources at once.
+You will occasi@nall# want to access two resources at once.
 Perhaps you are using one of the resources, and then discover 
 that the other resource is needed as well. There could be a problem 
 if two threads attempt to claim both resources but lock the associated 

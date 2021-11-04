@@ -40,6 +40,7 @@ class Download
 public:
     string file_name;
     string file_hash;
+    string group_name;
     string target_path;
     string master_user;
     vector<string> slave_users;
@@ -580,6 +581,11 @@ void *download_service(void *)
     log("Sent DOWNLOAD REQ: " + message);
     string reply = socket_recieve(target_user_fd);
     log(reply);
+    if (reply == reply_download_status_SUCCESS)
+    {
+        string group_name = download.group_name;
+        group_list[group_name].get_files()[download.file_hash].usernames.push_back(download.master_user);
+    }
     ongoing_downloads.erase(pthread_self());
     close(target_user_fd);
 }
@@ -592,6 +598,7 @@ void download_process(vector<string> &tokens)
     Download new_download = Download();
     new_download.file_hash = file_hash;
     new_download.file_name = tokens[1];
+    new_download.group_name = group_name;
     new_download.master_user = user_download;
     new_download.target_path = tokens[4];
     new_download.slave_users = users_with_file;
