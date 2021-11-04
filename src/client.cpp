@@ -15,6 +15,8 @@ class FileInfo
 public:
     string file_name;
     string file_hash;
+    string cumulative_hash;
+    string group_name;
     string path;
     unsigned int size;
     int last_block_size;
@@ -26,7 +28,7 @@ public:
      */
     int status;
     int blocks;
-    pthread_mutex_t file_sync;
+    pthread_mutex_t file_sync = PTHREAD_MUTEX_INITIALIZER;
     FileInfo(){};
     FileInfo(string path)
     {
@@ -134,12 +136,25 @@ public:
         }
         return true;
     }
+    void generate_cumulative_hash()
+    {
+        string hash = integrity[0].second.substr(0, SHA_DIGEST_LENGTH);
+        for (int i = 1; i < integrity.size(); i++)
+        {
+            hash = hash.append(integrity[i].second);
+            hash = hash.substr(0, SHA_DIGEST_LENGTH * 2);
+            hash = generate_SHA1(hash);
+        }
+        cumulative_hash = hash;
+    }
 };
 /**
  * @brief <file_hash,FileInfo>
  * 
  */
 unordered_map<string, FileInfo> hosted_files;
+pthread_mutex_t hosted_file_access;
+unordered_map<string, FileInfo> download_mirror;
 bool file_uploader(vector<string> &tokens)
 {
     string path = tokens[1];
@@ -148,8 +163,16 @@ bool file_uploader(vector<string> &tokens)
         sync_print_ln("|| Incorrect file path provided");
         return false;
     }
+    string file_name = extract_file_name(path);
+    string file_hash = generate_SHA1(file_name);
+    if (hosted_files.find(file_hash) != hosted_files.end())
+    {
+        sync_print_ln("|| File is already uploaded");
+        return false;
+    }
     FileInfo file = FileInfo(path);
     file.file_hash_generation();
+    file.generate_cumulative_hash();
     hosted_files[file.file_hash] = file;
     return true;
 }
@@ -160,12 +183,27 @@ void send_file_block_hash(int socket_fd, string file_hash)
     ack_recieve(socket_fd);
     socket_send(socket_fd, file.file_name); //filename
     ack_recieve(socket_fd);
-    for (auto i : file.integrity) //filehash
+    socket_send(socket_fd, file.cumulative_hash);
+    ack_recieve(socket_fd);
+    socket_send(socket_fd, to_string(file.size));
+    string group_name = socket_recieve(socket_fd);
+    hosted_files[file_hash].group_name = group_name;
+    ack_send(socket_fd);
+}
+void file_upload_send(int socket_fd, string file_hash)
+{
+    send_file_block_hash(socket_fd, file_hash);
+    sync_print_ln(">>" + socket_recieve(socket_fd));
+}
+void file_upload_verify_send(int socket_fd, string file_hash)
+{
+    send_file_block_hash(socket_fd, file_hash);
+    if (ack_recieve(socket_fd) == reply_NACK)
     {
-        socket_send(socket_fd, i.second);
-        ack_recieve(socket_fd);
+        hosted_files.erase(file_hash);
     }
     ack_send(socket_fd);
+    sync_print_ln(">>" + socket_recieve(socket_fd));
 }
 void send_file_info(int socket_fd, FileInfo file)
 {
@@ -210,21 +248,6 @@ FileInfo recieve_file_info(int socket_fd)
     }
     return file;
 }
-void file_upload_send(int socket_fd, string file_hash)
-{
-    send_file_block_hash(socket_fd, file_hash);
-    sync_print_ln(">>" + socket_recieve(socket_fd));
-}
-void file_upload_verify_send(int socket_fd, string file_hash)
-{
-    send_file_block_hash(socket_fd, file_hash);
-    if (ack_recieve(socket_fd) == reply_NACK)
-    {
-        hosted_files.erase(file_hash);
-    }
-    ack_send(socket_fd);
-    sync_print_ln(">>" + socket_recieve(socket_fd));
-}
 void show_downloads()
 {
     if (!user_logged_in)
@@ -234,10 +257,40 @@ void show_downloads()
     }
     if (!hosted_files.empty())
     {
+        sync_print_ln("Uploads/Downloads: ");
         for (auto h : hosted_files)
         {
-            sync_print_ln("");
+            pthread_mutex_lock(&h.second.file_sync);
+            string ch;
+            bool download_flag = false;
+            if (h.second.status == 0)
+            {
+                ch = "S";
+            }
+            else if (h.second.status == 1)
+            {
+                ch = "D";
+                download_flag = true;
+            }
+            else
+            {
+                ch = "C";
+            }
+            if (download_flag)
+            {
+                int perc = h.second.get_percentage();
+                sync_print_ln("[" + ch + "]" + "\t" + h.second.file_name + "\t\t [" + to_string(perc) + "%" + "]");
+            }
+            else
+            {
+                sync_print_ln("[" + ch + "]" + "\t" + h.second.file_name);
+            }
+            pthread_mutex_unlock(&h.second.file_sync);
         }
+    }
+    else
+    {
+        sync_print_ln("No downloads available");
     }
 }
 /**
@@ -252,6 +305,12 @@ bool file_download_pre_verification(vector<string> &tokens)
     string destination_path = tokens[3];
     if (!directory_query(destination_path))
         return false;
+    string file_hash = generate_SHA1(tokens[2]);
+    if (hosted_files.find(file_hash) != hosted_files.end())
+    {
+        sync_print_ln("|| File already downloaded");
+        return false;
+    }
     return true;
 }
 bool validator(vector<string> tokens)
@@ -360,6 +419,11 @@ void client_startup()
             {
                 continue;
             }
+            else if (tokens[0] == command_show_downloads && tokens.size() == 1)
+            {
+                show_downloads();
+                continue;
+            }
             string message = pack_message(tokens);
             socket_send(client_fd, message);
             string reply = socket_recieve(client_fd);
@@ -385,10 +449,9 @@ void *write_blocks(void *arg)
     int socket_fd = client_setup(make_pair(info.peer.ip_address, info.peer.listener_port));
     string command = pack_message(info.tokens);
     socket_send(socket_fd, command);
-    FileInfo &download_file = hosted_files[file_hash];
     fstream file;
-    file.open(download_file.path, ios::binary | ios::out | ios::in);
-    file.seekg(start_index, ios::beg);
+    file.open(hosted_files[file_hash].path, ios::binary | ios::out | ios::in);
+    file.seekp(start_index * constants_file_block_size, ios::beg);
     for (int i = 0; i < blocks_write; i++)
     {
         int bytes_to_write = stoi(socket_recieve(socket_fd));
@@ -397,7 +460,7 @@ void *write_blocks(void *arg)
         bzero(buffer, 0);
         read(socket_fd, buffer, bytes_to_write);
         file.write(buffer, bytes_to_write);
-        download_file.set_hash(start_index + i, buffer, bytes_to_write);
+        hosted_files[file_hash].set_hash(start_index + i, buffer, bytes_to_write);
         ack_send(socket_fd);
     }
     file.close();
@@ -417,7 +480,7 @@ void *send_blocks(void *arg)
         FileInfo seed_file = hosted_files[file_hash];
         fstream file;
         file.open(seed_file.path, ios::binary | ios::in);
-        file.seekg(start_index, ios::beg);
+        file.seekg(start_index * constants_file_block_size, ios::beg);
         for (int i = start_index; i < start_index + blocks_read; i++)
         {
 
@@ -485,6 +548,7 @@ void *download_start(void *arg)
             }
             else
                 total -= current_alloc;
+            log("Starting Peer download for" + to_string(start) + " to " + to_string(start + current_alloc));
             vector<string> command_tokens = {command_send_blocks, file_hash, to_string(start), to_string(current_alloc), to_string((int)flag_last_block)};
             start += current_alloc;
             ThreadInfo *new_info = new ThreadInfo;
@@ -496,6 +560,7 @@ void *download_start(void *arg)
         {
             pthread_join(download_threads[i], NULL);
         }
+        log("Threads have joined");
         if (!hosted_files[file_hash].integrity_reconciliation(to_download))
         {
             log("Download failed file integrity compromised");
@@ -504,6 +569,7 @@ void *download_start(void *arg)
         }
         else
         {
+            log("File:" + target_file.file_name + " has completed download");
             hosted_files[file_hash].status = 2;
             socket_send(info.peer.socket_fd, reply_download_status_SUCCESS);
         }
@@ -550,7 +616,7 @@ void process(vector<string> tokens, Peer peer)
     {
         pthread_create(&worker_thread, NULL, fetch_file_info, info);
     }
-    log("Connection to peer established :" + peer_list[worker_thread].ip_address + " " + peer_list[worker_thread].port);
+    log("Connection to peer established :" + info->peer.ip_address + " " + info->peer.port);
     peer_list[worker_thread] = peer;
     pthread_mutex_unlock(&thread_info_maintainer);
 }
@@ -582,13 +648,17 @@ void *listener_startup(void *)
 
 int main(int argc, char *argv[])
 {
-    if (argc != 3)
+    if (argc != 3 && argc != 4)
     {
         exit(1);
     }
+    else if (argc == 4)
+    {
+        logging_level = atoi(argv[3]);
+    }
     string file_path(argv[2]);
     string socket_input(argv[1]);
-    logging_level = 3;
+    logging_level = 2;
     set_log_file("client_log_file.txt");
     read_tracker_file(file_path);
     client_socket_listener = read_socket_input(socket_input);

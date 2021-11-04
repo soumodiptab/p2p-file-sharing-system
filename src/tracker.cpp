@@ -32,7 +32,9 @@ public:
     }
     string file_name;
     string file_hash;
-    vector<string> block_hashes;
+    string cumulative_hash;
+    int size;
+    int blocks;
     vector<string> usernames;
 };
 class Download
@@ -496,24 +498,25 @@ vector<string> download_file_verification(vector<string> &tokens)
 }
 FileInfo store_file_block_hash(vector<string> &tokens)
 {
+    string group_name = tokens[1];
     string file_hash = tokens[2];
     int blocks = stoi(socket_recieve(get_current_socket()));
     ack_send(get_current_socket());
     string file_name = socket_recieve(get_current_socket());
     ack_send(get_current_socket());
+    string cumulative_hash = socket_recieve(get_current_socket());
+    ack_send(get_current_socket());
+    int file_size = stoi(socket_recieve(get_current_socket()));
+    socket_send(get_current_socket(), group_name);
+    ack_recieve(get_current_socket());
     FileInfo file = FileInfo();
     file.file_name = file_name;
     file.file_hash = file_hash;
+    file.size = file_size;
+    file.cumulative_hash = cumulative_hash;
     file.usernames.push_back(logged_user_threads[pthread_self()]);
-    log("File:" + file_name + " File hash: " + file_hash);
-    for (int i = 1; i <= blocks; i++)
-    {
-        string hash_block = socket_recieve(get_current_socket());
-        ack_send(get_current_socket());
-        file.block_hashes.push_back(hash_block);
-        log("Block[" + to_string(i) + "]:" + hash_block);
-    }
-    ack_recieve(get_current_socket());
+    file.blocks = blocks;
+    log("Uploading file information: " + file_name + " File hash: " + cumulative_hash);
     return file;
 }
 void upload_verify(vector<string> &tokens)
@@ -522,16 +525,10 @@ void upload_verify(vector<string> &tokens)
     FileInfo file = store_file_block_hash(tokens);
     FileInfo file_stored = group_list[group_name].get_files()[file.file_hash];
     bool flag = true;
-    if (file.block_hashes.size() == file_stored.block_hashes.size())
+    if (file.blocks == file_stored.blocks)
     {
-        for (int i = 0; i < file.block_hashes.size(); i++)
-        {
-            if (file.block_hashes[i] != file_stored.block_hashes[i])
-            {
-                flag = false;
-                break;
-            }
-        }
+        if (file.cumulative_hash != file_stored.cumulative_hash)
+            flag = false;
     }
     else
     {
@@ -543,11 +540,13 @@ void upload_verify(vector<string> &tokens)
         group_list[group_name].get_files()[file.file_hash].usernames.push_back(logged_user_threads[pthread_self()]);
         reply = reply_file_upload_recon_success;
         ack_send(get_current_socket());
+        log("File hashes matched merging and adding new seeder");
     }
     else
     {
         reply = reply_file_upload_recon_error;
         nack_send(get_current_socket());
+        log("File hashes mis-match, discarding request");
     }
     ack_recieve(get_current_socket());
     socket_send(get_current_socket(), reply);
@@ -558,6 +557,7 @@ void upload_process(vector<string> &tokens)
     FileInfo file = store_file_block_hash(tokens);
     group_list[group_name].add_file(file.file_hash, file);
     socket_send(get_current_socket(), reply_file_upload_complete);
+    log("File upload complete : " + file.file_name + " on group :" + group_name);
 }
 void *download_service(void *)
 {
