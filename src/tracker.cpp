@@ -11,14 +11,12 @@ class User
 public:
     string user_name;
     string password;
-    string color_assignment;
     unordered_set<string> group_memberships;
     User() {}
     User(string user_name, string password, string color_assignment)
     {
         this->user_name = user_name;
         this->password = password;
-        this->color_assignment = color_assignment;
     }
 };
 class FileInfo
@@ -36,6 +34,7 @@ public:
     int size;
     int blocks;
     vector<string> usernames;
+    vector<string> block_hashes;
 };
 class Download
 {
@@ -233,13 +232,6 @@ int get_current_socket()
 {
     return logged_user_list[logged_user_threads[pthread_self()]].socket_fd;
 }
-string color_picker()
-{
-    if (user_list.size() >= colors.size())
-        return "\033[0m";
-    else
-        return colors[user_list.size()];
-}
 vector<string> create_user(vector<string> &tokens)
 {
     string user_name = tokens[1];
@@ -280,7 +272,6 @@ vector<string> login_user(vector<string> &tokens)
     else
     {
         reply_tokens = {command_login};
-        reply_tokens.push_back(user_list[user_name].color_assignment);
         reply_tokens.push_back(reply_user_login);
         logged_user_list[user_name] = peer_list[pthread_self()];
         peer_list[pthread_self()].user_name = user_name;
@@ -291,7 +282,6 @@ vector<string> login_user(vector<string> &tokens)
 vector<string> logout_user(vector<string> &tokens)
 {
     vector<string> reply_tokens = {command_logout};
-    reply_tokens.push_back("\033[0m");
     reply_tokens.push_back(reply_user_logout);
     logged_user_list.erase(logged_user_threads[pthread_self()]);
     logged_user_threads.erase(pthread_self());
@@ -508,7 +498,6 @@ FileInfo store_file_block_hash(vector<string> &tokens)
     ack_send(get_current_socket());
     int file_size = stoi(socket_recieve(get_current_socket()));
     socket_send(get_current_socket(), group_name);
-    ack_recieve(get_current_socket());
     FileInfo file = FileInfo();
     file.file_name = file_name;
     file.file_hash = file_hash;
@@ -516,6 +505,14 @@ FileInfo store_file_block_hash(vector<string> &tokens)
     file.cumulative_hash = cumulative_hash;
     file.usernames.push_back(logged_user_threads[pthread_self()]);
     file.blocks = blocks;
+    for (int i = 1; i <= blocks; i++)
+    {
+        string hash_block = socket_recieve(get_current_socket());
+        ack_send(get_current_socket());
+        file.block_hashes.push_back(hash_block);
+        log("Block[" + to_string(i) + "]:" + hash_block);
+    }
+    ack_recieve(get_current_socket());
     log("Uploading file information: " + file_name + " File hash: " + cumulative_hash);
     return file;
 }
@@ -687,15 +684,6 @@ void *thread_service(void *socket_fd)
     peer_list.erase(pthread_self());
     close(thread_socket_fd);
 }
-/**
- * @brief Will implement later -> command line interface inside tracker[T.B.A.]
- *  Main features: show tracker statistics
- * This will be on another thread
- */
-void shell_setup()
-{
-    cout << colors[0];
-}
 void start_tracker()
 {
     int tracker_socket_fd = server_setup(tracker_1);
@@ -730,7 +718,7 @@ int main(int argc, char *argv[])
     }
     string file_path(argv[1]);
     logging_level = 3;
-    set_log_file("tracker_log_file.txt");
+    set_log_file("tracker_log_file.log");
     read_tracker_file(file_path);
     start_tracker();
     return 0;

@@ -43,14 +43,6 @@ pair<string, string> tracker_2;
 
 //-----------------------------------------------------------------------------------
 
-const string colors[] = {
-    "\033[34m",//0
-    "\033[31m",//1
-    "\033[36m",//2
-    "\033[32m",//3
-    "\033[33m",//4
-    "\033[35m",//5
-};
 pthread_mutex_t log_mutex;
 pthread_mutex_t console_mutex;
 /**
@@ -114,7 +106,7 @@ void write_to_log(const std::string &message)
 {
     pthread_mutex_lock(&log_mutex);
     fstream file_out;
-    file_out.open(log_file, ios::out | ios::app);
+    file_out.open(log_file, ios::out | ios::trunc);
     file_out << message << endl;
     file_out.close();
     pthread_mutex_unlock(&log_mutex);
@@ -479,4 +471,76 @@ void create_dummy_file(string path, int size)
     file.put('\0');
     file.close();
     log("Dummy file of size :" + to_string(size) + " created.");
+}
+void highlight_red(string message)
+{
+    cout << "\033[31m";
+    sync_print(message);
+    cout << "\033[0m";
+}
+void highlight_green(string message)
+{
+    cout << "\033[32m";
+    sync_print(message);
+    cout << "\033[0m";
+}
+void highlight_blue(string message)
+{
+    cout << "\033[34m";
+    sync_print(message);
+    cout << "\033[0m";
+}
+void highlight_cyan(string message)
+{
+    cout << "\033[36m";
+    sync_print(message);
+    cout << "\033[0m";
+}
+void highlight_yellow(string message)
+{
+    cout << "\033[33m";
+    sync_print(message);
+    cout << "\033[0m";
+}
+void highlight_purple(string message)
+{
+    cout << "\033[35m";
+    sync_print(message);
+    cout << "\033[0m";
+}
+void highlight_red_ln(string message)
+{
+    cout << "\033[31m";
+    sync_print_ln(message);
+    cout << "\033[0m";
+}
+void highlight_green_ln(string message)
+{
+    cout << "\033[32m";
+    sync_print_ln(message);
+    cout << "\033[0m";
+}
+void highlight_blue_ln(string message)
+{
+    cout << "\033[34m";
+    sync_print_ln(message);
+    cout << "\033[0m";
+}
+void highlight_cyan_ln(string message)
+{
+    cout << "\033[36m";
+    sync_print_ln(message);
+    cout << "\033[0m";
+}
+void highlight_yellow_ln(string message)
+{
+    cout << "\033[33m";
+    sync_print_ln(message);
+    cout << "\033[0m";
+}
+void highlight_purple_ln(string message)
+{
+    cout << "\033[35m";
+    sync_print_ln(message);
+    cout << "\033[0m";
 }

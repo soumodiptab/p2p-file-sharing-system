@@ -89,3 +89,4 @@ const int constants_file_block_size = 64;
  * 
  */
 const int download_mode = 1;
+const string line = "============================================================================================================";

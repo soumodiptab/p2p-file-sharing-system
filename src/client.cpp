@@ -113,8 +113,8 @@ public:
     int get_percentage()
     {
         int val = get_integrity();
-        float new_val = val*100;
-        int perc=(new_val/blocks);
+        float new_val = val * 100;
+        int perc = (new_val / blocks);
         return perc;
     }
     bool integrity_reconciliation(FileInfo file)
@@ -155,14 +155,14 @@ bool file_uploader(vector<string> &tokens)
     string path = tokens[1];
     if (!file_query(path))
     {
-        sync_print_ln("|| Incorrect file path provided");
+        highlight_cyan_ln("|| Incorrect file path provided");
         return false;
     }
     string file_name = extract_file_name(path);
     string file_hash = generate_SHA1(file_name);
     if (hosted_files.find(file_hash) != hosted_files.end())
     {
-        sync_print_ln("|| File is already uploaded");
+        highlight_cyan_ln("|| File is already uploaded");
         return false;
     }
     FileInfo file = FileInfo(path);
@@ -182,13 +182,18 @@ void send_file_block_hash(int socket_fd, string file_hash)
     ack_recieve(socket_fd);
     socket_send(socket_fd, to_string(file.size));
     string group_name = socket_recieve(socket_fd);
+    for (auto i : file.integrity) //filehash
+    {
+        socket_send(socket_fd, i.second);
+        ack_recieve(socket_fd);
+    }
     hosted_files[file_hash].group_name = group_name;
     ack_send(socket_fd);
 }
 void file_upload_send(int socket_fd, string file_hash)
 {
     send_file_block_hash(socket_fd, file_hash);
-    sync_print_ln(">>" + socket_recieve(socket_fd));
+    highlight_green_ln(">>" + socket_recieve(socket_fd));
 }
 void file_upload_verify_send(int socket_fd, string file_hash)
 {
@@ -198,7 +203,7 @@ void file_upload_verify_send(int socket_fd, string file_hash)
         hosted_files.erase(file_hash);
     }
     ack_send(socket_fd);
-    sync_print_ln(">>" + socket_recieve(socket_fd));
+    highlight_green_ln(">>" + socket_recieve(socket_fd));
 }
 void send_file_info(int socket_fd, FileInfo file)
 {
@@ -247,12 +252,13 @@ void show_downloads()
 {
     if (!user_logged_in)
     {
-        sync_print_ln("|| User is not logged in.");
+        highlight_cyan_ln("|| User is not logged in.");
         return;
     }
     if (!hosted_files.empty())
     {
         sync_print_ln("Uploads/Downloads: ");
+        sync_print_ln(line);
         for (auto h : hosted_files)
         {
             string ch;
@@ -273,17 +279,18 @@ void show_downloads()
             if (download_flag)
             {
                 int perc = h.second.get_percentage();
-                sync_print_ln("[" + ch + "]" + "\t" + h.second.file_name + "\t\t [" + to_string(perc) + "%" + "]");
+                highlight_yellow_ln("[" + ch + "]" + "\t" + h.second.file_name + "\t\t [" + to_string(perc) + "%" + "]");
             }
             else
             {
-                sync_print_ln("[" + ch + "]" + "\t" + h.second.file_name);
+                highlight_purple_ln("[" + ch + "]" + "\t" + h.second.file_name);
             }
         }
+        sync_print_ln(line);
     }
     else
     {
-        sync_print_ln("No downloads available");
+        highlight_cyan_ln("|| No downloads available");
     }
 }
 /**
@@ -298,10 +305,12 @@ bool file_download_pre_verification(vector<string> &tokens)
     string destination_path = tokens[3];
     if (!directory_query(destination_path))
         return false;
-    string file_hash = generate_SHA1(tokens[2]);
+    string file_name = tokens[2];
+    string file_hash = generate_SHA1(file_name);
+    string complete_path = destination_path.append(file_name);
     if (hosted_files.find(file_hash) != hosted_files.end())
     {
-        sync_print_ln("|| File already downloaded");
+        highlight_cyan_ln("|| File already downloaded");
         return false;
     }
     return true;
@@ -340,7 +349,7 @@ bool validator(vector<string> tokens)
         return file_download_pre_verification(tokens);
     else
     {
-        sync_print_ln("||Invalid command/parameter");
+        highlight_cyan_ln("||Invalid command/parameter");
         return false;
     }
 }
@@ -352,18 +361,16 @@ void action(vector<string> tokens)
     }
     if (tokens[0] == command_print && tokens.size() == 2)
     {
-        sync_print_ln(">>" + tokens[1]);
+        highlight_green_ln(">>" + tokens[1]);
     }
-    else if (tokens[0] == command_login && tokens.size() == 3)
+    else if (tokens[0] == command_login && tokens.size() == 2)
     {
-        sync_print(tokens[1]);
-        sync_print_ln(">>" + tokens[2]);
+        highlight_green_ln(">>" + tokens[1]);
         user_logged_in = true;
     }
-    else if (tokens[0] == command_logout && tokens.size() == 3)
+    else if (tokens[0] == command_logout && tokens.size() == 2)
     {
-        sync_print(tokens[1]);
-        sync_print_ln(">>" + tokens[2]);
+        highlight_green_ln(">>" + tokens[2]);
         user_logged_in = false;
     }
     else if (tokens[0] == command_upload_file)
@@ -377,7 +384,7 @@ void action(vector<string> tokens)
             if (!stoi(tokens[1]))
             {
                 hosted_files.erase(tokens[2]);
-                sync_print_ln(">>" + tokens[3]);
+                highlight_green_ln(">>" + tokens[3]);
             }
         }
     }
@@ -387,7 +394,7 @@ void action(vector<string> tokens)
     }
     else if (tokens[0] == command_download_file && tokens.size() == 6)
     {
-        sync_print_ln(">>" + tokens[5]);
+        highlight_green_ln(">>" + tokens[5]);
     }
 }
 void client_startup()
@@ -399,6 +406,7 @@ void client_startup()
         exit(EXIT_FAILURE);
     }
     socket_send(client_fd, client_socket_listener.second);
+    sync_print_ln(line);
     while (true)
     {
         try
@@ -652,7 +660,7 @@ int main(int argc, char *argv[])
     string file_path(argv[2]);
     string socket_input(argv[1]);
     logging_level = 2;
-    set_log_file("client_log_file.txt");
+    set_log_file("client_log_file.log");
     read_tracker_file(file_path);
     client_socket_listener = read_socket_input(socket_input);
     pthread_create(&listener_thread, NULL, listener_startup, NULL);
