@@ -4,7 +4,7 @@
  * 1. Process input and segregate into commands [common input parser]
  * 2. Validator to validate command [validator_api_name]
  * 3. Process command and generate follow up:
- * 4. Acknowledgement / Action
+ * 4. Acknowledgement / Post-Processing
  */
 class User
 {
@@ -580,7 +580,7 @@ void *download_service(void *)
     socket_send(target_user_fd, message);
     log("Sent DOWNLOAD REQ: " + message);
     string reply = socket_recieve(target_user_fd);
-    log(reply);
+    log(reply + " for file: " + download.file_name + " and user: " + download.master_user);
     if (reply == reply_download_status_SUCCESS)
     {
         string group_name = download.group_name;

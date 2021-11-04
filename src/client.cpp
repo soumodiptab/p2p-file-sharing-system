@@ -78,14 +78,12 @@ public:
     }
     string get_bit_vector()
     {
-        pthread_mutex_lock(&file_sync);
         string bit_vector = "";
         for (auto i : integrity)
         {
             bit_vector.append(to_string((int)i.first));
         }
         return bit_vector;
-        pthread_mutex_unlock(&file_sync);
     }
     string get_hash(int block_id)
     {
@@ -93,21 +91,17 @@ public:
     }
     void set_hash(int block_id, char *buffer, int size)
     {
-        pthread_mutex_lock(&file_sync);
         integrity[block_id].first = 1;
         integrity[block_id].second = generate_SHA1(buffer, size);
-        pthread_mutex_unlock(&file_sync);
     }
     int get_integrity()
     {
-        pthread_mutex_lock(&file_sync);
         int value = 0;
         for (auto b : integrity)
         {
             if (b.first)
                 value++;
         }
-        pthread_mutex_unlock(&file_sync);
         return value;
     }
     bool check_integrity()
@@ -119,7 +113,8 @@ public:
     int get_percentage()
     {
         int val = get_integrity();
-        int perc = (val / blocks) * 100;
+        float new_val = val*100;
+        int perc=(new_val/blocks);
         return perc;
     }
     bool integrity_reconciliation(FileInfo file)
@@ -260,7 +255,6 @@ void show_downloads()
         sync_print_ln("Uploads/Downloads: ");
         for (auto h : hosted_files)
         {
-            pthread_mutex_lock(&h.second.file_sync);
             string ch;
             bool download_flag = false;
             if (h.second.status == 0)
@@ -285,7 +279,6 @@ void show_downloads()
             {
                 sync_print_ln("[" + ch + "]" + "\t" + h.second.file_name);
             }
-            pthread_mutex_unlock(&h.second.file_sync);
         }
     }
     else
