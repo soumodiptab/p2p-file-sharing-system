@@ -27,6 +27,7 @@ using namespace std;
 class Peer
 {
 public:
+    Peer() {}
     string ip_address;
     string port;
     string user_name;
@@ -171,6 +172,12 @@ int server_setup(pair<string, string> socket_pair)
         log(constants_socket_failure + " : " + socket_pair.first + " " + socket_pair.second);
         return -1;
     }
+    int enable = 1;
+    if (setsockopt(socket_file, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
+    {
+        log("SO_REUSEADDR Failed");
+        return -1;
+    }
     //Clear the pointer
     //returns -1 on error
     if (bind(socket_file, socket_addr->ai_addr, socket_addr->ai_addrlen) == -1)
@@ -230,6 +237,25 @@ int client_setup(pair<string, string> socket_pair)
  */
 int socket_send(int socket_fd, const string &message)
 {
+    string buffer_size = to_string(message.size());
+    if (send(socket_fd, buffer_size.c_str(), buffer_size.size(), 0) == -1)
+    {
+        log(constants_socket_send_failure);
+        throw(constants_socket_send_failure);
+    }
+    int x;
+    char buf[1];
+    //ACK RECIEVE
+    if ((x = recv(socket_fd, buf, 1, 0)) == -1)
+    {
+        log(constants_socket_recv_failure);
+        throw(constants_socket_recv_failure);
+    }
+    else if (x == 0)
+    {
+        throw(constants_client_disconnected);
+    }
+    //ACTUAL PAYLOAD
     if (send(socket_fd, message.c_str(), message.size(), 0) == -1)
     {
         log(constants_socket_send_failure);
@@ -246,9 +272,10 @@ int socket_send(int socket_fd, const string &message)
  */
 string socket_recieve(int socket_fd)
 {
-    char buff[constants_message_buffer_limit];
+    char *buffer = new char[10];
+    bzero(buffer, 0);
     int bytes_recieved;
-    if ((bytes_recieved = recv(socket_fd, buff, constants_message_buffer_limit, 0)) == -1)
+    if ((bytes_recieved = recv(socket_fd, buffer, 10, 0)) == -1)
     {
         log(constants_socket_recv_failure);
         throw(constants_socket_recv_failure);
@@ -257,9 +284,39 @@ string socket_recieve(int socket_fd)
     {
         throw(constants_client_disconnected);
     }
-    string message(buff);
-    string extract = message.substr(0, bytes_recieved);
-    return extract;
+    string y(buffer);
+    string y1 = y.substr(0, bytes_recieved);
+    int bytes_waiting = stoi(y1);
+    char buf[1];
+    buf[0] = '1';
+    //ACK SEND
+    if (send(socket_fd, buf, 1, 0) == -1)
+    {
+        log(constants_socket_send_failure);
+        throw(constants_socket_send_failure);
+    }
+    bytes_recieved = 0;
+    string data = "";
+    while (bytes_waiting != bytes_recieved)
+    {
+        int bytes;
+        char buff[bytes_waiting];
+        bzero(buff, 0);
+        if ((bytes = recv(socket_fd, buff, bytes_waiting, 0)) == -1)
+        {
+            log(constants_socket_recv_failure);
+            throw(constants_socket_recv_failure);
+        }
+        bytes_recieved += bytes;
+        string partial(buff);
+        string extract = partial.substr(0, bytes);
+        data.append(extract);
+        if (bytes_recieved > bytes_waiting)
+        {
+            log("Incorrect payload");
+        }
+    }
+    return data;
 }
 /**
  * @brief ACKNOWLEDGEMENT Sending to synchronize socket transfer

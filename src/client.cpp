@@ -451,7 +451,7 @@ void *download_start(void *arg)
         vector<Peer> peers;
         for (int i = 1; i <= number_of_peers; i++)
         {
-            pair<string, string> socket = read_socket_input(info.tokens[3 + i]);
+            pair<string, string> socket = read_socket_input(info.tokens[4 + i]);
             Peer new_peer = Peer();
             new_peer.ip_address = socket.first;
             new_peer.listener_port = socket.second;
@@ -483,10 +483,11 @@ void *download_start(void *arg)
                 total = 0;
                 flag_last_block = true;
             }
-            total -= current_alloc;
+            else
+                total -= current_alloc;
             vector<string> command_tokens = {command_send_blocks, file_hash, to_string(start), to_string(current_alloc), to_string((int)flag_last_block)};
             start += current_alloc;
-            ThreadInfo *new_info = (ThreadInfo *)malloc(sizeof(ThreadInfo));
+            ThreadInfo *new_info = new ThreadInfo;
             new_info->tokens = command_tokens;
             new_info->peer = peers[i];
             pthread_create(&download_threads[i], NULL, write_blocks, new_info);
@@ -520,7 +521,7 @@ void *fetch_file_info(void *arg)
     ThreadInfo info = *((ThreadInfo *)arg);
     try
     {
-        string file_hash = info.tokens[2];
+        string file_hash = info.tokens[1];
         FileInfo file = hosted_files[file_hash];
         send_file_info(info.peer.socket_fd, file);
     }
@@ -532,7 +533,7 @@ void *fetch_file_info(void *arg)
 }
 void process(vector<string> tokens, Peer peer)
 {
-    ThreadInfo *info = (ThreadInfo *)malloc(sizeof(ThreadInfo));
+    ThreadInfo *info = new ThreadInfo;
     info->peer = peer;
     info->tokens = tokens;
     pthread_t worker_thread;

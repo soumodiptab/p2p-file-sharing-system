@@ -656,7 +656,7 @@ void post_process(vector<string> &tokens)
     {
         upload_verify(tokens);
     }
-    if (tokens[0] == command_download_file && tokens.size() == 3)
+    if (tokens[0] == command_download_file && tokens.size() == 6)
     {
         download_process(tokens);
     }
