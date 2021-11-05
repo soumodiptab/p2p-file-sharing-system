@@ -445,12 +445,14 @@ void *write_blocks(void *arg)
     int socket_fd = client_setup(make_pair(info.peer.ip_address, info.peer.listener_port));
     string command = pack_message(info.tokens);
     socket_send(socket_fd, command);
+    ack_recieve(socket_fd);
     fstream file;
     file.open(hosted_files[file_hash].path, ios::binary | ios::out | ios::in);
     file.seekp(start_index * constants_file_block_size, ios::beg); //create buffer here
     char buffer[constants_file_block_size];
     for (int i = start_index; i < start_index + blocks_write; i++)
     {
+        ack_send(socket_fd);
         int bytes_to_write = stoi(socket_recieve(socket_fd));
         ack_send(socket_fd);
         bzero(buffer, 0);
@@ -469,6 +471,7 @@ void *send_blocks(void *arg)
     ThreadInfo info = *((ThreadInfo *)arg);
     try
     {
+
         string file_hash = info.tokens[1];
         int start_index = stoi(info.tokens[2]);
         int blocks_read = stoi(info.tokens[3]);
@@ -478,8 +481,10 @@ void *send_blocks(void *arg)
         file.open(seed_file.path, ios::binary | ios::in);
         file.seekg(start_index * constants_file_block_size, ios::beg);
         char buffer[constants_file_block_size];
+        ack_send(info.peer.socket_fd);
         for (int i = start_index; i < start_index + blocks_read; i++)
         {
+            ack_recieve(info.peer.socket_fd);
             bzero(buffer, 0);
             file.read(buffer, constants_file_block_size);
             socket_send(info.peer.socket_fd, to_string(file.gcount()));

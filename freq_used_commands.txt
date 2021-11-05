@@ -23,6 +23,7 @@ create_user u3 p3
 login u3 p3
 join_group g1
 download_file g1 file1.txt /home/soumodiptab/repo/p2p-mini-torrent-client/client3/
+download_file g1 adisap.mp4 /home/soumodiptab/repo/p2p-mini-torrent-client/client3/
 
 show_downloads
 
