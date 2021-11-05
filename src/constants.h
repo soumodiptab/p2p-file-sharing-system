@@ -83,7 +83,7 @@ const int constants_connection_backlog = 10;
  * @brief Sets the block size of file
  * 
  */
-const int constants_file_block_size = 64;
+const int constants_file_block_size = 64000;
 /**
  * @brief 1:Single Peer to Peer 2:Multi-thread peer to peer 3:Multi-Peer multi thread
  * 

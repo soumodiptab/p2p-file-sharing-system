@@ -18,12 +18,12 @@ public:
     string cumulative_hash;
     string group_name;
     string path;
-    unsigned int size;
+    long long size;
     int last_block_size;
     vector<pair<bool, string>> integrity;
     vector<Peer> peers;
     /**
-     * @brief 0-seeding 1-downloading 2-seeding+downloaded
+     * @brief 0-seeding 1-downloading 2-seeding+downloaded 3- failed
      * 
      */
     int status;
@@ -265,25 +265,20 @@ void show_downloads()
             bool download_flag = false;
             if (h.second.status == 0)
             {
-                ch = "S";
+                highlight_green_ln("[S] \t [" + h.second.group_name + "] \t" + h.second.file_name);
             }
             else if (h.second.status == 1)
             {
-                ch = "D";
-                download_flag = true;
-            }
-            else
-            {
-                ch = "C";
-            }
-            if (download_flag)
-            {
                 int perc = h.second.get_percentage();
-                highlight_yellow_ln("[" + ch + "]" + "\t" + h.second.file_name + "\t\t [" + to_string(perc) + "%" + "]");
+                highlight_yellow_ln("[D] \t [" + h.second.group_name + "] \t" + h.second.file_name + "\t [" + to_string(perc) + "%" + "]");
             }
-            else
+            else if (h.second.status = 2)
             {
-                highlight_purple_ln("[" + ch + "]" + "\t" + h.second.file_name);
+                highlight_purple_ln("[C] \t [" + h.second.group_name + "] \t" + h.second.file_name);
+            }
+            else if (h.second.status = 3)
+            {
+                highlight_red_ln("[F] \t [" + h.second.group_name + "] \t" + h.second.file_name);
             }
         }
         sync_print_ln(line);
@@ -452,16 +447,16 @@ void *write_blocks(void *arg)
     socket_send(socket_fd, command);
     fstream file;
     file.open(hosted_files[file_hash].path, ios::binary | ios::out | ios::in);
-    file.seekp(start_index * constants_file_block_size, ios::beg);
-    for (int i = 0; i < blocks_write; i++)
+    file.seekp(start_index * constants_file_block_size, ios::beg); //create buffer here
+    char buffer[constants_file_block_size];
+    for (int i = start_index; i < start_index + blocks_write; i++)
     {
         int bytes_to_write = stoi(socket_recieve(socket_fd));
         ack_send(socket_fd);
-        char *buffer = new char[bytes_to_write];
         bzero(buffer, 0);
         read(socket_fd, buffer, bytes_to_write);
         file.write(buffer, bytes_to_write);
-        hosted_files[file_hash].set_hash(start_index + i, buffer, bytes_to_write);
+        hosted_files[file_hash].set_hash(i, buffer, bytes_to_write);
         ack_send(socket_fd);
     }
     file.close();
@@ -482,10 +477,9 @@ void *send_blocks(void *arg)
         fstream file;
         file.open(seed_file.path, ios::binary | ios::in);
         file.seekg(start_index * constants_file_block_size, ios::beg);
+        char buffer[constants_file_block_size];
         for (int i = start_index; i < start_index + blocks_read; i++)
         {
-
-            char *buffer = new char[constants_file_block_size];
             bzero(buffer, 0);
             file.read(buffer, constants_file_block_size);
             socket_send(info.peer.socket_fd, to_string(file.gcount()));
@@ -509,32 +503,38 @@ void *download_start(void *arg)
     try
     {
         string file_name = info.tokens[1];
-        string file_hash = info.tokens[2];
+        string file_hash = generate_SHA1(file_name);
+        string cumulative_hash = info.tokens[2];
         string file_path = info.tokens[3];
-        int number_of_peers = stoi(info.tokens[4]);
+        string group_name = info.tokens[4];
+        int blocks = stoi(info.tokens[5]);
+        long long size = stoll(info.tokens[6]);
+        int number_of_peers = stoi(info.tokens[7]);
         vector<Peer> peers;
         for (int i = 1; i <= number_of_peers; i++)
         {
-            pair<string, string> socket = read_socket_input(info.tokens[4 + i]);
+            pair<string, string> socket = read_socket_input(info.tokens[7 + i]);
             Peer new_peer = Peer();
             new_peer.ip_address = socket.first;
             new_peer.listener_port = socket.second;
             peers.push_back(new_peer);
         }
+        /*
         int socket_fd = client_setup(make_pair(peers[0].ip_address, peers[0].listener_port));
         vector<string> command_tokens = {command_fetch_file_info, file_hash};
         socket_send(socket_fd, pack_message(command_tokens));
         FileInfo to_download = recieve_file_info(socket_fd);
         close(socket_fd);
+        */
         file_path.append(file_name);
-        FileInfo target_file = FileInfo(file_path, to_download.blocks);
-        target_file.size = to_download.size;
-        target_file.size = to_download.size;
+        FileInfo target_file = FileInfo(file_path, blocks);
+        target_file.size = size;
+        target_file.group_name = group_name; //add blocks to target_file
         hosted_files[file_hash] = target_file;
-        create_dummy_file(target_file.path, to_download.size);
-        int allocation = to_download.blocks / number_of_peers;
+        create_dummy_file(target_file.path, size);
+        int allocation = blocks / number_of_peers;
         pthread_t download_threads[number_of_peers];
-        int total = to_download.blocks;
+        int total = blocks;
         int start = 0;
         hosted_files[file_hash].status = 1;
         for (int i = 0; i < number_of_peers; i++)
@@ -549,7 +549,7 @@ void *download_start(void *arg)
             }
             else
                 total -= current_alloc;
-            log("Starting Peer download for" + to_string(start) + " to " + to_string(start + current_alloc));
+            log(to_string(i) + ": Downloading from Peer: " + peers[i].ip_address + " " + peers[i].listener_port + " from " + to_string(start) + "th block to " + to_string(start + current_alloc) + "th");
             vector<string> command_tokens = {command_send_blocks, file_hash, to_string(start), to_string(current_alloc), to_string((int)flag_last_block)};
             start += current_alloc;
             ThreadInfo *new_info = new ThreadInfo;
@@ -562,10 +562,16 @@ void *download_start(void *arg)
             pthread_join(download_threads[i], NULL);
         }
         log("Threads have joined");
+        log("Retrieving file integrity hash values from peer");
+        int socket_fd = client_setup(make_pair(peers[0].ip_address, peers[0].listener_port));
+        vector<string> command_tokens = {command_fetch_file_info, file_hash};
+        socket_send(socket_fd, pack_message(command_tokens));
+        FileInfo to_download = recieve_file_info(socket_fd);
+        close(socket_fd);
         if (!hosted_files[file_hash].integrity_reconciliation(to_download))
         {
             log("Download failed file integrity compromised");
-            hosted_files.erase(file_hash);
+            hosted_files[file_hash].status = 3;
             socket_send(info.peer.socket_fd, reply_download_status_FAILURE);
         }
         else

@@ -31,7 +31,7 @@ public:
     string file_name;
     string file_hash;
     string cumulative_hash;
-    int size;
+    long long size;
     int blocks;
     vector<string> usernames;
     vector<string> block_hashes;
@@ -41,7 +41,10 @@ class Download
 public:
     string file_name;
     string file_hash;
+    string cumulative_hash;
     string group_name;
+    long long size;
+    int blocks;
     string target_path;
     string master_user;
     vector<string> slave_users;
@@ -220,6 +223,10 @@ public:
                 reply = reply_group_file_list_empty;
         }
         return reply;
+    }
+    FileInfo &get_file(string file_hash)
+    {
+        return file_list[file_hash];
     }
 };
 /**
@@ -496,7 +503,7 @@ FileInfo store_file_block_hash(vector<string> &tokens)
     ack_send(get_current_socket());
     string cumulative_hash = socket_recieve(get_current_socket());
     ack_send(get_current_socket());
-    int file_size = stoi(socket_recieve(get_current_socket()));
+    long long file_size = stoll(socket_recieve(get_current_socket()));
     socket_send(get_current_socket(), group_name);
     FileInfo file = FileInfo();
     file.file_name = file_name;
@@ -565,8 +572,11 @@ void *download_service(void *)
     int target_user_fd = client_setup(make_pair(target.ip_address, target.listener_port));
     vector<string> message_tokens = {command_download_init};
     message_tokens.push_back(download.file_name);
-    message_tokens.push_back(download.file_hash);
+    message_tokens.push_back(download.cumulative_hash);
     message_tokens.push_back(download.target_path);
+    message_tokens.push_back(download.group_name);
+    message_tokens.push_back(to_string(download.blocks));
+    message_tokens.push_back(to_string(download.size));
     message_tokens.push_back(to_string(download.slave_users.size()));
     for (auto u : download.slave_users)
     {
@@ -591,11 +601,15 @@ void download_process(vector<string> &tokens)
     string group_name = tokens[2];
     string file_hash = tokens[3];
     vector<string> users_with_file = group_list[group_name].find_uploaders_online(file_hash);
+    FileInfo file_to_download = group_list[group_name].get_file(file_hash);
     string user_download = logged_user_threads[pthread_self()];
     Download new_download = Download();
     new_download.file_hash = file_hash;
     new_download.file_name = tokens[1];
     new_download.group_name = group_name;
+    new_download.cumulative_hash = file_to_download.cumulative_hash;
+    new_download.size = file_to_download.size;
+    new_download.blocks = file_to_download.blocks;
     new_download.master_user = user_download;
     new_download.target_path = tokens[4];
     new_download.slave_users = users_with_file;

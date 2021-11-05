@@ -106,7 +106,7 @@ void write_to_log(const std::string &message)
 {
     pthread_mutex_lock(&log_mutex);
     fstream file_out;
-    file_out.open(log_file, ios::out | ios::trunc);
+    file_out.open(log_file, ios::out | ios::app);
     file_out << message << endl;
     file_out.close();
     pthread_mutex_unlock(&log_mutex);
