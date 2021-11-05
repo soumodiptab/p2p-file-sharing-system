@@ -46,6 +46,7 @@ const string reply_group_no_pending = "No Pending requests";
 const string reply_group_already_exists = "Group already exists";
 const string reply_group_created = "Group has been created";
 const string reply_group_not_exits = "Group does not exist";
+const string reply_group_owner_left = "Group is disbanded. owner has left";
 const string reply_group_no_group = "No Group Exists";
 const string reply_group_not_owner = "You are not owner of this group";
 const string reply_group_no_user_pending = "There is no group join request from this user";

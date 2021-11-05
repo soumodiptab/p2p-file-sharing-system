@@ -157,18 +157,48 @@ public:
         }
         return reply;
     }
+    bool is_owner(string username)
+    {
+        if (owner == username)
+            return true;
+        return false;
+    }
+    int get_member_size()
+    {
+        return members.size();
+    }
     string remove_request(string username)
     {
         string reply;
         auto request_position = find(join_requests.begin(), join_requests.end(), username);
         if (request_position == join_requests.end())
             reply = reply_group_not_member;
-        else if (owner == username) //dont allow owner to leave group for now
-            reply = reply_group_owner_not_leave;
-        else
+        else if (owner != username)
         {
             members.erase(username);
+            /*
+            pthread_mutex_lock(&file_list_mutex);
+            vector<string> mark_for_deletion;
+            for (auto &file : file_list)
+            {
+                if (file.second.usernames.find(username) != file.second.usernames.find(username))
+                {
+                    file.second.usernames.erase(username);
+                    if (file.second.usernames.empty())
+                        mark_for_deletion.push_back(file.first);
+                }
+            }
+            pthread_mutex_unlock(&file_list_mutex);
+            for(auto m : mark_for_deletion)
+            {
+                remove_file_seeder(m,username);
+            }
+            */
             reply = reply_group_leave_group;
+        }
+        else
+        {
+            reply = reply_group_owner_not_leave;
         }
         return reply;
     }
@@ -186,17 +216,16 @@ public:
         file_list[hash_file] = file;
         pthread_mutex_unlock(&file_list_mutex);
     }
-    void remove_file_seeder(string file_hash,string username)
+    void remove_file_seeder(string file_hash, string username)
     {
         pthread_mutex_lock(&file_list_mutex);
-        if(file_list[file_hash].usernames.size()==1)
+        if (file_list[file_hash].usernames.size() == 1)
         {
             file_list.erase(file_hash);
         }
         else
         {
             file_list[file_hash].usernames.erase(username);
-
         }
         pthread_mutex_unlock(&file_list_mutex);
     }
@@ -296,6 +325,7 @@ vector<string> login_user(vector<string> &tokens)
     else
     {
         reply_tokens = {command_login};
+        reply_tokens.push_back(user_name);
         reply_tokens.push_back(reply_user_login);
         logged_user_list[user_name] = peer_list[pthread_self()];
         peer_list[pthread_self()].user_name = user_name;
@@ -376,6 +406,10 @@ vector<string> accept_request(vector<string> &tokens)
     {
         reply_tokens.push_back(reply_group_not_exits);
     }
+    else if (logged_user_threads[pthread_self()] != group_list[group_name].get_owner())
+    {
+        reply_tokens.push_back(reply_group_not_owner);
+    }
     else
     {
         reply_tokens.push_back(group_list[group_name].approve_join_request(member));
@@ -389,6 +423,11 @@ vector<string> leave_group(vector<string> &tokens)
     if (group_list.find(group_name) == group_list.end())
     {
         reply_tokens.push_back(reply_group_not_exits);
+    }
+    else if (group_list[group_name].is_owner(logged_user_threads[pthread_self()]) && group_list[group_name].get_member_size() == 1)
+    {
+        group_list.erase(group_name);
+        reply_tokens.push_back(reply_group_owner_left);
     }
     else
     {
@@ -438,22 +477,21 @@ vector<string> stop_share(vector<string> &tokens)
     string file_name = tokens[2];
     string file_hash = generate_SHA1(file_name);
     vector<string> reply_tokens = {command_print};
-    if (group_list.empty())//no groups
+    if (group_list.empty()) //no groups
     {
         reply_tokens.push_back(reply_group_no_group);
     }
-    if (group_list.find(group_name) == group_list.end())//group doesnt exist
+    if (group_list.find(group_name) == group_list.end()) //group doesnt exist
     {
         reply_tokens.push_back(reply_group_not_exits);
     }
-    else if(group_list[group_name].get_files().find(file_hash)!=group_list[group_name].get_files().end())//file not shared on group
+    else if (group_list[group_name].get_files().find(file_hash) != group_list[group_name].get_files().end()) //file not shared on group
     {
         reply_tokens.push_back(reply_file_download_file_not_exists);
     }
     else
     {
-
-        reply_tokens={command_stop_share,file_hash,reply_file_stop_share};
+        reply_tokens = {command_stop_share, file_hash, reply_file_stop_share};
     }
     return reply_tokens;
 }
@@ -599,6 +637,7 @@ void *download_service(void *)
     message_tokens.push_back(download.group_name);
     message_tokens.push_back(to_string(download.blocks));
     message_tokens.push_back(to_string(download.size));
+    message_tokens.push_back(download.master_user);
     message_tokens.push_back(to_string(download.slave_users.size()));
     for (auto u : download.slave_users)
     {

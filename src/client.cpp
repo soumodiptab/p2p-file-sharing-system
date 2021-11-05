@@ -4,6 +4,7 @@ unordered_map<pthread_t, Peer> peer_list;
 pthread_t listener_thread;
 int client_fd;
 bool user_logged_in = false;
+string logged_in_user = "";
 typedef struct T
 {
     Peer peer;
@@ -15,6 +16,7 @@ class FileInfo
 public:
     string file_name;
     string file_hash;
+    string user_name;
     string cumulative_hash;
     string group_name;
     string path;
@@ -23,7 +25,7 @@ public:
     vector<pair<bool, string>> integrity;
     vector<Peer> peers;
     /**
-     * @brief 0-seeding 1-downloading 2-seeding+downloaded 3- failed
+     * @brief 0-seeding 1-downloading 2-seeding+downloaded 3-Verifying 4- failed
      * 
      */
     int status;
@@ -193,6 +195,7 @@ void send_file_block_hash(int socket_fd, string file_hash)
 void file_upload_send(int socket_fd, string file_hash)
 {
     send_file_block_hash(socket_fd, file_hash);
+    hosted_files[file_hash].user_name = logged_in_user;
     highlight_green_ln(">>" + socket_recieve(socket_fd));
 }
 void file_upload_verify_send(int socket_fd, string file_hash)
@@ -203,6 +206,7 @@ void file_upload_verify_send(int socket_fd, string file_hash)
         hosted_files.erase(file_hash);
     }
     ack_send(socket_fd);
+    hosted_files[file_hash].user_name = logged_in_user;
     highlight_green_ln(">>" + socket_recieve(socket_fd));
 }
 void send_file_info(int socket_fd, FileInfo file)
@@ -257,10 +261,26 @@ void show_downloads()
     }
     if (!hosted_files.empty())
     {
+        bool user_auth = false;
+        for (auto f : hosted_files)
+        {
+            if (f.second.user_name == logged_in_user)
+            {
+                user_auth = true;
+                break;
+            }
+        }
+        if (!user_auth)
+        {
+            highlight_cyan_ln("|| No downloads available");
+            return;
+        }
         sync_print_ln("Uploads/Downloads: ");
         sync_print_ln(line);
         for (auto h : hosted_files)
         {
+            if (f.second.user_name != logged_in_user)
+                continue;
             string ch;
             bool download_flag = false;
             if (h.second.status == 0)
@@ -277,6 +297,10 @@ void show_downloads()
                 highlight_purple_ln("[C] \t [" + h.second.group_name + "] \t" + h.second.file_name);
             }
             else if (h.second.status = 3)
+            {
+                highlight_blue_ln("[D] \t [" + h.second.group_name + "] \t" + h.second.file_name + "\t [Verifying Integrity...]");
+            }
+            else if (h.second.status = 4)
             {
                 highlight_red_ln("[F] \t [" + h.second.group_name + "] \t" + h.second.file_name);
             }
@@ -298,11 +322,11 @@ void show_downloads()
 bool file_download_pre_verification(vector<string> &tokens)
 {
     string destination_path = tokens[3];
-    if (!directory_query(destination_path) || destination_path[destination_path.size()-1]!='/')
+    if (!directory_query(destination_path) || destination_path[destination_path.size() - 1] != '/')
     {
         highlight_cyan_ln("|| Invalid download path");
         return false;
-    }    
+    }
     string file_name = tokens[2];
     string file_hash = generate_SHA1(file_name);
     string complete_path = destination_path.append(file_name);
@@ -313,6 +337,20 @@ bool file_download_pre_verification(vector<string> &tokens)
     }
     return true;
 }
+bool leave_group_file_validator(vector<string> &tokens)
+{
+    string group_name = tokens[1];
+    for (auto file : hosted_files)
+    {
+        if (file.second.group_name == group_name)
+        {
+            highlight_cyan_ln("|| File " + file.second.file_name + " is currently being seeded. Cannot leave group. Stop Sharing first");
+            return false;
+        }
+    }
+    return true;
+}
+
 bool validator(vector<string> tokens)
 {
     if (tokens.size() == 0)
@@ -334,7 +372,7 @@ bool validator(vector<string> tokens)
     else if (tokens[0] == command_accept_request && tokens.size() == 3)
         return true;
     else if (tokens[0] == command_leave_group && tokens.size() == 2)
-        return true;
+        return leave_group_file_validator(tokens);
     else if (tokens[0] == command_upload_file && tokens.size() == 3)
         return file_uploader(tokens);
     else if (tokens[0] == command_list_files && tokens.size() == 2)
@@ -361,15 +399,17 @@ void action(vector<string> tokens)
     {
         highlight_green_ln(">>" + tokens[1]);
     }
-    else if (tokens[0] == command_login && tokens.size() == 2)
+    else if (tokens[0] == command_login && tokens.size() == 3)
     {
-        highlight_green_ln(">>" + tokens[1]);
+        highlight_green_ln(">>" + tokens[2]);
         user_logged_in = true;
+        logged_in_user = tokens[1];
     }
     else if (tokens[0] == command_logout && tokens.size() == 2)
     {
         highlight_green_ln(">>" + tokens[1]);
         user_logged_in = false;
+        logged_in_user.clear();
     }
     else if (tokens[0] == command_upload_file)
     {
@@ -394,7 +434,7 @@ void action(vector<string> tokens)
     {
         highlight_green_ln(">>" + tokens[5]);
     }
-    else if(tokens[0] == command_stop_share && tokens.size()==3)
+    else if (tokens[0] == command_stop_share && tokens.size() == 3)
     {
         hosted_files.erase(tokens[1]);
         highlight_green_ln(">>" + tokens[2]);
@@ -523,11 +563,12 @@ void *download_start(void *arg)
         string group_name = info.tokens[4];
         int blocks = stoi(info.tokens[5]);
         long long size = stoll(info.tokens[6]);
-        int number_of_peers = stoi(info.tokens[7]);
+        string user_name = info.tokens[7];
+        int number_of_peers = stoi(info.tokens[8]);
         vector<Peer> peers;
         for (int i = 1; i <= number_of_peers; i++)
         {
-            pair<string, string> socket = read_socket_input(info.tokens[7 + i]);
+            pair<string, string> socket = read_socket_input(info.tokens[8 + i]);
             Peer new_peer = Peer();
             new_peer.ip_address = socket.first;
             new_peer.listener_port = socket.second;
@@ -543,6 +584,7 @@ void *download_start(void *arg)
         file_path.append(file_name);
         FileInfo target_file = FileInfo(file_path, blocks);
         target_file.size = size;
+        target_file.user_name = user_name;
         target_file.group_name = group_name; //add blocks to target_file
         hosted_files[file_hash] = target_file;
         create_dummy_file(target_file.path, size);
@@ -577,6 +619,7 @@ void *download_start(void *arg)
         }
         log("Threads have joined");
         log("Retrieving file integrity hash values from peer");
+        hosted_files[file_hash].status = 3;
         int socket_fd = client_setup(make_pair(peers[0].ip_address, peers[0].listener_port));
         vector<string> command_tokens = {command_fetch_file_info, file_hash};
         socket_send(socket_fd, pack_message(command_tokens));
@@ -585,7 +628,7 @@ void *download_start(void *arg)
         if (!hosted_files[file_hash].integrity_reconciliation(to_download))
         {
             log("Download failed file integrity compromised");
-            hosted_files[file_hash].status = 3;
+            hosted_files[file_hash].status = 4;
             socket_send(info.peer.socket_fd, reply_download_status_FAILURE);
         }
         else
