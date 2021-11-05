@@ -136,6 +136,7 @@ public:
                 members.insert(username);
                 join_requests.erase(request_position);
                 reply = reply_group_new_member;
+                log("User : " + username + " has been added to group : " + name);
             }
         }
         return reply;
@@ -154,6 +155,7 @@ public:
         {
             join_requests.push_back(username);
             reply = reply_group_join_added;
+            log("User: " + username + " has added join request to group : " + name);
         }
         return reply;
     }

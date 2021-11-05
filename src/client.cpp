@@ -279,7 +279,7 @@ void show_downloads()
         sync_print_ln(line);
         for (auto h : hosted_files)
         {
-            if (f.second.user_name != logged_in_user)
+            if (h.second.user_name != logged_in_user)
                 continue;
             string ch;
             bool download_flag = false;
@@ -401,14 +401,20 @@ void action(vector<string> tokens)
     }
     else if (tokens[0] == command_login && tokens.size() == 3)
     {
-        highlight_green_ln(">>" + tokens[2]);
+        //highlight_green_ln(">>" + tokens[2]);
         user_logged_in = true;
         logged_in_user = tokens[1];
+        sync_print_ln(line);
+        highlight_green_ln(">> User:" + logged_in_user + " is logged in");
+        sync_print_ln(line);
     }
     else if (tokens[0] == command_logout && tokens.size() == 2)
     {
-        highlight_green_ln(">>" + tokens[1]);
+        //highlight_green_ln(">>" + tokens[1]);
         user_logged_in = false;
+        sync_print_ln(line);
+        highlight_red_ln(">> User:" + logged_in_user + " is logged out");
+        sync_print_ln(line);
         logged_in_user.clear();
     }
     else if (tokens[0] == command_upload_file)
