@@ -1,4 +1,5 @@
 #include<bits/stdc++.h>
+#include<pthread.h>
 using namespace std;
 string extract_file_name(string &path)
 {
@@ -8,7 +9,13 @@ string extract_file_name(string &path)
 int main()
 {
     string path;
-    cin>>path;
-    cout<<extract_file_name(path);
+    //cin>>path;
+    int x=10;
+    while(x--)
+    {
+        cout<<"Hello";
+    }
+    sleep(0.05);
+    //cout<<extract_file_name(path);
     return 0;
 }

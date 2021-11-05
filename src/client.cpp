@@ -298,8 +298,11 @@ void show_downloads()
 bool file_download_pre_verification(vector<string> &tokens)
 {
     string destination_path = tokens[3];
-    if (!directory_query(destination_path))
+    if (!directory_query(destination_path) || destination_path[destination_path.size()-1]!='/')
+    {
+        highlight_cyan_ln("|| Invalid download path");
         return false;
+    }    
     string file_name = tokens[2];
     string file_hash = generate_SHA1(file_name);
     string complete_path = destination_path.append(file_name);
@@ -365,7 +368,7 @@ void action(vector<string> tokens)
     }
     else if (tokens[0] == command_logout && tokens.size() == 2)
     {
-        highlight_green_ln(">>" + tokens[2]);
+        highlight_green_ln(">>" + tokens[1]);
         user_logged_in = false;
     }
     else if (tokens[0] == command_upload_file)
@@ -390,6 +393,11 @@ void action(vector<string> tokens)
     else if (tokens[0] == command_download_file && tokens.size() == 6)
     {
         highlight_green_ln(">>" + tokens[5]);
+    }
+    else if(tokens[0] == command_stop_share && tokens.size()==3)
+    {
+        hosted_files.erase(tokens[1]);
+        highlight_green_ln(">>" + tokens[2]);
     }
 }
 void client_startup()
@@ -459,8 +467,9 @@ void *write_blocks(void *arg)
         read(socket_fd, buffer, bytes_to_write);
         file.write(buffer, bytes_to_write);
         hosted_files[file_hash].set_hash(i, buffer, bytes_to_write);
-        ack_send(socket_fd);
+        sleep(0.5);
     }
+    ack_send(socket_fd);
     file.close();
     close(socket_fd);
 }
@@ -490,8 +499,8 @@ void *send_blocks(void *arg)
             socket_send(info.peer.socket_fd, to_string(file.gcount()));
             ack_recieve(info.peer.socket_fd);
             write(info.peer.socket_fd, buffer, constants_file_block_size);
-            ack_recieve(info.peer.socket_fd);
         }
+        ack_recieve(info.peer.socket_fd);
         file.close();
     }
     catch (string error)

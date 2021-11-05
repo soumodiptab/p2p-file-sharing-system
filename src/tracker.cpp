@@ -33,7 +33,7 @@ public:
     string cumulative_hash;
     long long size;
     int blocks;
-    vector<string> usernames;
+    unordered_set<string> usernames;
     vector<string> block_hashes;
 };
 class Download
@@ -71,6 +71,7 @@ unordered_map<pthread_t, string> logged_user_threads;
 unordered_map<pthread_t, Peer> peer_list;
 unordered_map<pthread_t, Download> ongoing_downloads;
 pthread_mutex_t download_mutex;
+pthread_mutex_t file_list_mutex;
 bool is_user_logged_in(string username)
 {
     if (logged_user_list.find(username) == logged_user_list.end())
@@ -181,7 +182,23 @@ public:
     }
     void add_file(string &hash_file, FileInfo &file)
     {
+        pthread_mutex_lock(&file_list_mutex);
         file_list[hash_file] = file;
+        pthread_mutex_unlock(&file_list_mutex);
+    }
+    void remove_file_seeder(string file_hash,string username)
+    {
+        pthread_mutex_lock(&file_list_mutex);
+        if(file_list[file_hash].usernames.size()==1)
+        {
+            file_list.erase(file_hash);
+        }
+        else
+        {
+            file_list[file_hash].usernames.erase(username);
+
+        }
+        pthread_mutex_unlock(&file_list_mutex);
     }
     vector<string> find_uploaders_online(string file_hash)
     {
@@ -421,17 +438,22 @@ vector<string> stop_share(vector<string> &tokens)
     string file_name = tokens[2];
     string file_hash = generate_SHA1(file_name);
     vector<string> reply_tokens = {command_print};
-    if (group_list.empty())
+    if (group_list.empty())//no groups
     {
         reply_tokens.push_back(reply_group_no_group);
     }
-    if (group_list.find(group_name) == group_list.end())
+    if (group_list.find(group_name) == group_list.end())//group doesnt exist
     {
         reply_tokens.push_back(reply_group_not_exits);
     }
+    else if(group_list[group_name].get_files().find(file_hash)!=group_list[group_name].get_files().end())//file not shared on group
+    {
+        reply_tokens.push_back(reply_file_download_file_not_exists);
+    }
     else
     {
-        reply_tokens.push_back(group_list[group_name].fetch_files());
+
+        reply_tokens={command_stop_share,file_hash,reply_file_stop_share};
     }
     return reply_tokens;
 }
@@ -510,7 +532,7 @@ FileInfo store_file_block_hash(vector<string> &tokens)
     file.file_hash = file_hash;
     file.size = file_size;
     file.cumulative_hash = cumulative_hash;
-    file.usernames.push_back(logged_user_threads[pthread_self()]);
+    file.usernames.insert(logged_user_threads[pthread_self()]);
     file.blocks = blocks;
     for (int i = 1; i <= blocks; i++)
     {
@@ -541,7 +563,7 @@ void upload_verify(vector<string> &tokens)
     string reply;
     if (flag)
     {
-        group_list[group_name].get_files()[file.file_hash].usernames.push_back(logged_user_threads[pthread_self()]);
+        group_list[group_name].get_files()[file.file_hash].usernames.insert(logged_user_threads[pthread_self()]);
         reply = reply_file_upload_recon_success;
         ack_send(get_current_socket());
         log("File hashes matched merging and adding new seeder");
@@ -591,7 +613,7 @@ void *download_service(void *)
     if (reply == reply_download_status_SUCCESS)
     {
         string group_name = download.group_name;
-        group_list[group_name].get_files()[download.file_hash].usernames.push_back(download.master_user);
+        group_list[group_name].get_files()[download.file_hash].usernames.insert(download.master_user);
     }
     ongoing_downloads.erase(pthread_self());
     close(target_user_fd);

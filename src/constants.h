@@ -64,6 +64,7 @@ const string reply_user_already_login = "User already logged in";
 const string reply_file_upload_complete = "File has been uploaded";
 const string reply_file_download_file_not_exists = "File does not exist";
 const string reply_file_download_file_uploader_offline = "File uploader is offline";
+const string reply_file_stop_share = "File is not being shared anymore";
 const string reply_file_download_started = "File has started downloading in the background";
 const string reply_file_upload_recon_error = "File name is same but hash do not match, please change file name";
 const string reply_file_upload_recon_success = "File name is same and hashes have reconclied. User is added as a seeder to file";
@@ -83,11 +84,8 @@ const int constants_connection_backlog = 10;
  * @brief Sets the block size of file
  * 
  */
-const int constants_file_block_size = 32768;
-const int constants_file_transfer_size = 2048;
-/**
- * @brief 1:Single Peer to Peer 2:Multi-thread peer to peer 3:Multi-Peer multi thread
- * 
- */
-const int download_mode = 1;
+const int constants_file_block_size = 4096;
+
+const int constants_file_transfer_size = 512;
+
 const string line = "============================================================================================================";
