@@ -777,6 +777,7 @@ int main(int argc, char *argv[])
     set_log_file("client_log_file.log");
     read_tracker_file(file_path);
     client_socket_listener = read_socket_input(socket_input);
+    sync_print_ln("[PEER: IP: " + client_socket_listener.first + " LISTENING PORT: " + client_socket_listener.second + " ]");
     pthread_create(&listener_thread, NULL, listener_startup, NULL);
     client_startup();
     return 0;
