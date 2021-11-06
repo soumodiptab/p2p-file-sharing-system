@@ -405,9 +405,14 @@ bool validator(vector<string> tokens)
     else if (tokens[0] == command_stop_share && tokens.size() == 3)
         return true;
     else if (tokens[0] == command_show_downloads && tokens.size() == 1)
-        return true;
+    {
+        show_downloads();
+        return false;
+    }
     else if (tokens[0] == command_download_file && tokens.size() == 4)
         return file_download_pre_verification(tokens);
+    else if (tokens[0] == command_close && tokens.size() == 1)
+        return true;
     else
     {
         highlight_cyan_ln("||Invalid command/parameter");
@@ -494,11 +499,8 @@ void client_startup()
             {
                 continue;
             }
-            else if (tokens[0] == command_show_downloads && tokens.size() == 1)
-            {
-                show_downloads();
-                continue;
-            }
+            else if (tokens[0] == command_close && tokens.size() == 1)
+                break;
             string message = pack_message(tokens);
             socket_send(client_fd, message);
             string reply = socket_recieve(client_fd);

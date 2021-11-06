@@ -22,6 +22,7 @@ const string command_send_blocks = "send_blocks";
 const string command_download_init = "download_init";
 const string command_fetch_file_info = "fetch_file";
 const string command_set_transfer_size = "set_transfer_size";
+const string command_close = "close";
 
 const string constants_socket_failure = "Failed to open socket";
 const string constants_socket_binding_failure = "Failed to bind socket";
