@@ -21,6 +21,7 @@ const string command_download_complete = "download_complete";
 const string command_send_blocks = "send_blocks";
 const string command_download_init = "download_init";
 const string command_fetch_file_info = "fetch_file";
+const string command_set_transfer_size = "set_transfer_size";
 
 const string constants_socket_failure = "Failed to open socket";
 const string constants_socket_binding_failure = "Failed to bind socket";
@@ -71,6 +72,8 @@ const string reply_file_upload_recon_error = "File name is same but hash do not 
 const string reply_file_upload_recon_success = "File name is same and hashes have reconclied. User is added as a seeder to file";
 const string reply_download_status_SUCCESS = "Download successfully completed";
 const string reply_download_status_FAILURE = "Download failed";
+const string reply_transfer_buffer_to_large = "Transfer buffer too large cannnot be set";
+const string reply_transfer_buffer_set_success = "New Transfer buffer has been update to the group files";
 
 const string reply_NACK = "NACK";
 const string reply_ACK = "ACK";
@@ -85,7 +88,7 @@ const int constants_connection_backlog = 10;
  * @brief Sets the block size of file
  * 
  */
-const int constants_file_block_size = 4096;
+const int constants_file_block_size = 524288;
 
 const int constants_file_transfer_size = 512;
 

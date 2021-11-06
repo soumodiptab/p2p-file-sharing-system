@@ -7,11 +7,13 @@ upload_file /home/soumodiptab/repo/p2p-mini-torrent-client/client1/file1.txt g1
 
 create_user u2 p2
 login u2 p2
-join_group g1
+
+
 
 download_file g1 file1.txt /home/soumodiptab/repo/p2p-mini-torrent-client/client2/
 download_file g1 avid.mp3 /home/soumodiptab/repo/p2p-mini-torrent-client/client2/
 download_file g1 AOTS4E1.mkv /home/soumodiptab/repo/p2p-mini-torrent-client/client2/
+download_file g1 AOTS4E1.mkv /home/soumodiptab/repo/p2p-mini-torrent-client/client3/
 download_file g1 random.mp4 /home/soumodiptab/Courses/repos/p2p-mini-torrent-client/client2/
 
 upload_file /home/soumodiptab/repo/p2p-mini-torrent-client/client1/avid.mp3 g1

@@ -144,6 +144,15 @@ public:
         }
         cumulative_hash = hash;
     }
+    string get_peer_string()
+    {
+        string peer_list = "";
+        for (auto p : peers)
+        {
+            peer_list.append("[" + p.ip_address + ":" + p.listener_port + "] ");
+        }
+        return peer_list;
+    }
 };
 /**
  * @brief <file_hash,FileInfo>
@@ -289,8 +298,9 @@ void show_downloads()
             }
             else if (h.second.status == 1)
             {
+                string peer_list = h.second.get_peer_string();
                 int perc = h.second.get_percentage();
-                highlight_yellow_ln("[D] \t [" + h.second.group_name + "] \t" + h.second.file_name + "\t [" + to_string(perc) + "%" + "]");
+                highlight_yellow_ln("[D] \t [" + h.second.group_name + "] \t" + h.second.file_name + "\t [" + to_string(perc) + "%" + "]\t" + peer_list);
             }
             else if (h.second.status = 2)
             {
@@ -350,7 +360,19 @@ bool leave_group_file_validator(vector<string> &tokens)
     }
     return true;
 }
-
+bool size_validator(vector<string> &tokens)
+{
+    string transfer_size = tokens[2];
+    char *p;
+    strtol(transfer_size.c_str(), &p, 10);
+    if (*p)
+    {
+        highlight_cyan_ln("|| Invalid size provided");
+        return false;
+    }
+    else
+        return true;
+}
 bool validator(vector<string> tokens)
 {
     if (tokens.size() == 0)
@@ -363,6 +385,8 @@ bool validator(vector<string> tokens)
         return true;
     else if (tokens[0] == command_join_group && tokens.size() == 2)
         return true;
+    else if (tokens[0] == command_set_transfer_size && tokens.size() == 3)
+        return size_validator(tokens);
     else if (tokens[0] == command_logout && tokens.size() == 1)
         return true;
     else if (tokens[0] == command_list_groups && tokens.size() == 1)
@@ -496,6 +520,7 @@ void *write_blocks(void *arg)
     int start_index = stoi(info.tokens[2]);
     int blocks_write = stoi(info.tokens[3]);
     bool last_block = stoi(info.tokens[4]);
+    int file_transfer_size = stoi(info.tokens[5]);
     int socket_fd = client_setup(make_pair(info.peer.ip_address, info.peer.listener_port));
     string command = pack_message(info.tokens);
     socket_send(socket_fd, command);
@@ -510,10 +535,16 @@ void *write_blocks(void *arg)
         int bytes_to_write = stoi(socket_recieve(socket_fd));
         ack_send(socket_fd);
         bzero(buffer, 0);
-        read(socket_fd, buffer, bytes_to_write);
+        int offset = 0, p_size = 0;
+        do
+        {
+            p_size = read(socket_fd, buffer + offset, file_transfer_size);
+            ack_send(socket_fd);
+            offset = offset + p_size;
+        } while (offset < bytes_to_write);
         file.write(buffer, bytes_to_write);
         hosted_files[file_hash].set_hash(i, buffer, bytes_to_write);
-        sleep(0.5);
+        ack_recieve(socket_fd);
     }
     ack_send(socket_fd);
     file.close();
@@ -531,6 +562,7 @@ void *send_blocks(void *arg)
         int start_index = stoi(info.tokens[2]);
         int blocks_read = stoi(info.tokens[3]);
         bool last_block = stoi(info.tokens[4]);
+        int file_transfer_size = stoi(info.tokens[5]);
         FileInfo seed_file = hosted_files[file_hash];
         fstream file;
         file.open(seed_file.path, ios::binary | ios::in);
@@ -542,9 +574,17 @@ void *send_blocks(void *arg)
             ack_recieve(info.peer.socket_fd);
             bzero(buffer, 0);
             file.read(buffer, constants_file_block_size);
-            socket_send(info.peer.socket_fd, to_string(file.gcount()));
+            int bytes_read = file.gcount();
+            socket_send(info.peer.socket_fd, to_string(bytes_read));
             ack_recieve(info.peer.socket_fd);
-            write(info.peer.socket_fd, buffer, constants_file_block_size);
+            int offset = 0, p_size = 0;
+            do
+            {
+                p_size = write(info.peer.socket_fd, buffer + offset, file_transfer_size);
+                offset = offset + p_size;
+                ack_recieve(info.peer.socket_fd);
+            } while (offset < bytes_read);
+            ack_send(info.peer.socket_fd);
         }
         ack_recieve(info.peer.socket_fd);
         file.close();
@@ -570,15 +610,20 @@ void *download_start(void *arg)
         int blocks = stoi(info.tokens[5]);
         long long size = stoll(info.tokens[6]);
         string user_name = info.tokens[7];
-        int number_of_peers = stoi(info.tokens[8]);
-        vector<Peer> peers;
+        int file_transfer_size = stoi(info.tokens[8]);
+        int number_of_peers = stoi(info.tokens[9]);
+        file_path.append(file_name);
+        FileInfo target_file = FileInfo(file_path, blocks);
+        target_file.size = size;
+        target_file.user_name = user_name;
+        target_file.group_name = group_name;
         for (int i = 1; i <= number_of_peers; i++)
         {
-            pair<string, string> socket = read_socket_input(info.tokens[8 + i]);
+            pair<string, string> socket = read_socket_input(info.tokens[9 + i]);
             Peer new_peer = Peer();
             new_peer.ip_address = socket.first;
             new_peer.listener_port = socket.second;
-            peers.push_back(new_peer);
+            target_file.peers.push_back(new_peer);
         }
         /*
         int socket_fd = client_setup(make_pair(peers[0].ip_address, peers[0].listener_port));
@@ -587,11 +632,6 @@ void *download_start(void *arg)
         FileInfo to_download = recieve_file_info(socket_fd);
         close(socket_fd);
         */
-        file_path.append(file_name);
-        FileInfo target_file = FileInfo(file_path, blocks);
-        target_file.size = size;
-        target_file.user_name = user_name;
-        target_file.group_name = group_name; //add blocks to target_file
         hosted_files[file_hash] = target_file;
         create_dummy_file(target_file.path, size);
         int allocation = blocks / number_of_peers;
@@ -611,12 +651,12 @@ void *download_start(void *arg)
             }
             else
                 total -= current_alloc;
-            log(to_string(i) + ": Downloading from Peer: " + peers[i].ip_address + " " + peers[i].listener_port + " from " + to_string(start) + "th block to " + to_string(start + current_alloc) + "th");
-            vector<string> command_tokens = {command_send_blocks, file_hash, to_string(start), to_string(current_alloc), to_string((int)flag_last_block)};
+            log(to_string(i) + ": Downloading from Peer: " + hosted_files[file_hash].peers[i].ip_address + " " + hosted_files[file_hash].peers[i].listener_port + " from " + to_string(start) + "th block to " + to_string(start + current_alloc) + "th");
+            vector<string> command_tokens = {command_send_blocks, file_hash, to_string(start), to_string(current_alloc), to_string((int)flag_last_block), to_string(file_transfer_size)};
             start += current_alloc;
             ThreadInfo *new_info = new ThreadInfo;
             new_info->tokens = command_tokens;
-            new_info->peer = peers[i];
+            new_info->peer = hosted_files[file_hash].peers[i];
             pthread_create(&download_threads[i], NULL, write_blocks, new_info);
         }
         for (int i = 0; i < number_of_peers; i++)
@@ -626,7 +666,7 @@ void *download_start(void *arg)
         log("Threads have joined");
         log("Retrieving file integrity hash values from peer");
         hosted_files[file_hash].status = 3;
-        int socket_fd = client_setup(make_pair(peers[0].ip_address, peers[0].listener_port));
+        int socket_fd = client_setup(make_pair(hosted_files[file_hash].peers[0].ip_address, hosted_files[file_hash].peers[0].listener_port));
         vector<string> command_tokens = {command_fetch_file_info, file_hash};
         socket_send(socket_fd, pack_message(command_tokens));
         FileInfo to_download = recieve_file_info(socket_fd);

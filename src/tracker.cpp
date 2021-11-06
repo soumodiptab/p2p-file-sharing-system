@@ -41,6 +41,7 @@ class Download
 public:
     string file_name;
     string file_hash;
+    int file_transfer_size;
     string cumulative_hash;
     string group_name;
     long long size;
@@ -85,6 +86,7 @@ class Group
 private:
     string name;
     string owner;
+    int file_transfer_size;
     set<string> members;
     vector<string> join_requests;
     /**
@@ -99,11 +101,20 @@ public:
     {
         this->name = group_name;
         this->owner = username;
+        this->file_transfer_size = constants_file_transfer_size;
         members.insert(owner);
     }
     string get_owner()
     {
         return owner;
+    }
+    int get_file_transfer_size()
+    {
+        return file_transfer_size;
+    }
+    void set_transfer_size(int size)
+    {
+        file_transfer_size = size;
     }
     bool is_member(string username)
     {
@@ -473,6 +484,34 @@ vector<string> list_files(vector<string> &tokens)
     }
     return reply_tokens;
 }
+vector<string> set_transfer_size(vector<string> &tokens)
+{
+    string group_name = tokens[1];
+    long long transfer_buffer_size = stoll(tokens[2]);
+    vector<string> reply_tokens = {command_print};
+    if (group_list.empty()) //no groups
+    {
+        reply_tokens.push_back(reply_group_no_group);
+    }
+    else if (group_list.find(group_name) == group_list.end()) //group doesnt exist
+    {
+        reply_tokens.push_back(reply_group_not_exits);
+    }
+    else if (!group_list[group_name].is_owner(logged_user_threads[pthread_self()]))
+    {
+        reply_tokens.push_back(reply_group_not_owner);
+    }
+    else if (transfer_buffer_size > constants_file_block_size)
+    {
+        reply_tokens.push_back(reply_transfer_buffer_to_large);
+    }
+    else
+    {
+        group_list[group_name].set_transfer_size(transfer_buffer_size);
+        reply_tokens.push_back(reply_transfer_buffer_set_success);
+    }
+    return reply_tokens;
+}
 vector<string> stop_share(vector<string> &tokens)
 {
     string group_name = tokens[1];
@@ -640,6 +679,7 @@ void *download_service(void *)
     message_tokens.push_back(to_string(download.blocks));
     message_tokens.push_back(to_string(download.size));
     message_tokens.push_back(download.master_user);
+    message_tokens.push_back(to_string(download.file_transfer_size));
     message_tokens.push_back(to_string(download.slave_users.size()));
     for (auto u : download.slave_users)
     {
@@ -668,6 +708,7 @@ void download_process(vector<string> &tokens)
     string user_download = logged_user_threads[pthread_self()];
     Download new_download = Download();
     new_download.file_hash = file_hash;
+    new_download.file_transfer_size = group_list[group_name].get_file_transfer_size();
     new_download.file_name = tokens[1];
     new_download.group_name = group_name;
     new_download.cumulative_hash = file_to_download.cumulative_hash;
@@ -704,6 +745,8 @@ vector<string> process(vector<string> &tokens)
         reply = list_groups(tokens);
     else if (tokens[0] == command_list_requests)
         reply = list_requests(tokens);
+    else if (tokens[0] == command_set_transfer_size)
+        reply = set_transfer_size(tokens);
     else if (tokens[0] == command_accept_request)
         reply = accept_request(tokens);
     else if (tokens[0] == command_leave_group)
