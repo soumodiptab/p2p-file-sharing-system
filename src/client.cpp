@@ -674,8 +674,6 @@ void *download_start(void *arg)
         FileInfo to_download = recieve_file_info(socket_fd);
         close(socket_fd);
         sleep(1);
-        auto end_time = std::chrono::high_resolution_clock::now();
-        hosted_files[file_hash].time_elapsed = chrono::duration_cast<chrono::seconds>(end_time - start_time).count();
         if (!hosted_files[file_hash].integrity_reconciliation(to_download))
         {
             log("Download failed file integrity compromised");
@@ -688,6 +686,8 @@ void *download_start(void *arg)
             hosted_files[file_hash].status = 2;
             socket_send(info.peer.socket_fd, reply_download_status_SUCCESS);
         }
+        auto end_time = std::chrono::high_resolution_clock::now();
+        hosted_files[file_hash].time_elapsed = chrono::duration_cast<chrono::seconds>(end_time - start_time).count();
     }
     catch (string error)
     {
