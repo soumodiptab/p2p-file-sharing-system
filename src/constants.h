@@ -73,7 +73,7 @@ const string reply_file_upload_recon_success = "File name is same and hashes hav
 const string reply_download_status_SUCCESS = "Download successfully completed";
 const string reply_download_status_FAILURE = "Download failed";
 const string reply_transfer_buffer_to_large = "Transfer buffer too large cannnot be set";
-const string reply_transfer_buffer_set_success = "New Transfer buffer has been update to the group files";
+const string reply_transfer_buffer_set_success = "New Transfer buffer has been updated to the group files";
 
 const string reply_NACK = "NACK";
 const string reply_ACK = "ACK";

@@ -18,6 +18,7 @@ public:
     string file_hash;
     string user_name;
     string cumulative_hash;
+    int time_elapsed;
     string group_name;
     string path;
     long long size;
@@ -304,7 +305,7 @@ void show_downloads()
             }
             else if (h.second.status = 2)
             {
-                highlight_purple_ln("[C] \t [" + h.second.group_name + "] \t" + h.second.file_name);
+                highlight_purple_ln("[C] \t [" + h.second.group_name + "] \t" + h.second.file_name + "\t [" + to_string(h.second.time_elapsed) + "s]");
             }
             else if (h.second.status = 3)
             {
@@ -312,7 +313,7 @@ void show_downloads()
             }
             else if (h.second.status = 4)
             {
-                highlight_red_ln("[F] \t [" + h.second.group_name + "] \t" + h.second.file_name);
+                highlight_red_ln("[F] \t [" + h.second.group_name + "] \t" + h.second.file_name + "\t [" + to_string(h.second.time_elapsed) + "s]");
             }
         }
         sync_print_ln(line);
@@ -602,6 +603,7 @@ void *download_start(void *arg)
     ThreadInfo info = *((ThreadInfo *)arg);
     try
     {
+        auto start_time = std::chrono::high_resolution_clock::now();
         string file_name = info.tokens[1];
         string file_hash = generate_SHA1(file_name);
         string cumulative_hash = info.tokens[2];
@@ -671,6 +673,9 @@ void *download_start(void *arg)
         socket_send(socket_fd, pack_message(command_tokens));
         FileInfo to_download = recieve_file_info(socket_fd);
         close(socket_fd);
+        sleep(1);
+        auto end_time = std::chrono::high_resolution_clock::now();
+        hosted_files[file_hash].time_elapsed = chrono::duration_cast<chrono::seconds>(end_time - start_time).count();
         if (!hosted_files[file_hash].integrity_reconciliation(to_download))
         {
             log("Download failed file integrity compromised");
