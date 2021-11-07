@@ -139,7 +139,7 @@ public:
         string hash = integrity[0].second;
         for (int i = 1; i < integrity.size(); i++)
         {
-            hash.substr(0,SHA_DIGEST_LENGTH);
+            hash.substr(0, SHA_DIGEST_LENGTH);
             hash = hash.append(integrity[i].second);
             hash = hash.substr(0, SHA_DIGEST_LENGTH * 2);
             hash = generate_SHA1(hash);
@@ -213,7 +213,7 @@ void file_upload_verify_send(int socket_fd, string file_hash)
 {
     send_file_block_hash(socket_fd, file_hash);
     hosted_files[file_hash].user_name = logged_in_user;
-    string reply=ack_recieve(socket_fd);
+    string reply = ack_recieve(socket_fd);
     if (reply == reply_NACK)
     {
         hosted_files.erase(file_hash);
@@ -767,6 +767,7 @@ void *listener_startup(void *)
 
 int main(int argc, char *argv[])
 {
+    logging_level = 2;
     if (argc != 3 && argc != 4)
     {
         exit(1);
@@ -777,7 +778,6 @@ int main(int argc, char *argv[])
     }
     string file_path(argv[2]);
     string socket_input(argv[1]);
-    logging_level = 2;
     set_log_file("client_log_file.log");
     read_tracker_file(file_path);
     client_socket_listener = read_socket_input(socket_input);
