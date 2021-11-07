@@ -70,6 +70,11 @@ unordered_map<pthread_t, string> logged_user_threads;
  * 
  */
 unordered_map<pthread_t, Peer> peer_list;
+/**
+ * @brief <username,peer>
+ * to avoid cross client login
+ */
+unordered_map<string, Peer> user_peer_binding;
 unordered_map<pthread_t, Download> ongoing_downloads;
 pthread_mutex_t download_mutex;
 pthread_mutex_t file_list_mutex;
@@ -79,6 +84,21 @@ bool is_user_logged_in(string username)
     {
         return false;
     }
+    return true;
+}
+bool peer_matcher(Peer a, Peer b)
+{
+    if (a.ip_address != b.ip_address)
+        return false;
+    /**
+     * @brief for practical purposes the below validations should be removed as each client will have different ip
+     *  But since our project testing is on loop back address its better to isolate all clients.
+     * 
+     */
+    if (a.port != b.port)
+        return false;
+    if (a.listener_port != b.listener_port)
+        return false;
     return true;
 }
 class Group
@@ -310,6 +330,7 @@ vector<string> create_user(vector<string> &tokens)
     else
     {
         user_list[user_name] = User(user_name, password, "\033[34m");
+        user_peer_binding[user_name] = peer_list[pthread_self()];
         reply_tokens.push_back(reply_user_new_user);
     }
     return reply_tokens;
@@ -330,6 +351,10 @@ vector<string> login_user(vector<string> &tokens)
             reply_tokens.push_back(reply_user_already_login);
         else
             reply_tokens.push_back(reply_user_already_login + " at : " + logged_user_list[user_name].ip_address + " " + logged_user_list[user_name].port);
+    }
+    else if (!peer_matcher(user_peer_binding[user_name], peer_list[pthread_self()])) //stopping cross login from different client
+    {
+        reply_tokens.push_back(reply_user_cross_not_allowed + " at : " + user_peer_binding[user_name].ip_address + " " + user_peer_binding[user_name].port);
     }
     else if (password != user_list[user_name].password)
     {
@@ -801,7 +826,8 @@ void *thread_service(void *socket_fd)
             break;
         }
     }
-    peer_list.erase(pthread_self());
+    logged_user_list.erase(logged_user_threads[pthread_self()]);
+    logged_user_threads.erase(pthread_self());
     close(thread_socket_fd);
 }
 void start_tracker()

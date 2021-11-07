@@ -65,6 +65,7 @@ const string reply_user_login_incorrect = "Incorrect Password";
 const string reply_user_not_login = "User is not logged";
 const string reply_user_already_login = "User already logged in";
 const string reply_file_upload_complete = "File has been uploaded";
+const string reply_user_cross_not_allowed = "This user is already assigned to a peer";
 const string reply_file_download_file_not_exists = "File does not exist";
 const string reply_file_download_file_uploader_offline = "File uploader is offline";
 const string reply_file_stop_share = "File is not being shared anymore";
