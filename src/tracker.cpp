@@ -638,15 +638,18 @@ FileInfo store_file_block_hash(vector<string> &tokens)
     file.cumulative_hash = cumulative_hash;
     file.usernames.insert(logged_user_threads[pthread_self()]);
     file.blocks = blocks;
-    for (int i = 1; i <= blocks; i++)
+    string full_hash = "";
+    for (int i = 0; i < blocks; i++)
     {
         string hash_block = socket_recieve(get_current_socket());
         ack_send(get_current_socket());
         file.block_hashes.push_back(hash_block);
+        full_hash.append(file.block_hashes[i].substr(0, SHA_DIGEST_LENGTH));
         log("Block[" + to_string(i) + "]:" + hash_block);
     }
     ack_recieve(get_current_socket());
-    log("Uploading file information: " + file_name + " File hash: " + cumulative_hash);
+    log("Uploading file information: " + file_name + " File cumulative hash: " + cumulative_hash);
+    log("Complete file hash: " + full_hash);
     return file;
 }
 void upload_verify(vector<string> &tokens)

@@ -4,6 +4,7 @@ create_group g1
 accept_request g1 u2
 accept_request g1 u3
 upload_file /home/soumodiptab/repo/p2p-mini-torrent-client/client1/file1.txt g1
+upload_file /home/soumodiptab/repo/p2p-mini-torrent-client/client3/file1.txt g1
 
 create_user u2 p2
 login u2 p2
