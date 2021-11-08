@@ -203,8 +203,7 @@ public:
     string remove_request(string username)
     {
         string reply;
-        auto request_position = find(join_requests.begin(), join_requests.end(), username);
-        if (request_position == join_requests.end())
+        if (members.find(username) == members.end())
             reply = reply_group_not_member;
         else if (owner != username)
         {
@@ -214,7 +213,7 @@ public:
             vector<string> mark_for_deletion;
             for (auto &file : file_list)
             {
-                if (file.second.usernames.find(username) != file.second.usernames.find(username))
+                if (file.second.usernamess.find(username) != file.second.usernames.find(username))
                 {
                     file.second.usernames.erase(username);
                     if (file.second.usernames.empty())
@@ -551,12 +550,13 @@ vector<string> stop_share(vector<string> &tokens)
     {
         reply_tokens.push_back(reply_group_not_exits);
     }
-    else if (group_list[group_name].get_files().find(file_hash) != group_list[group_name].get_files().end()) //file not shared on group
+    else if (group_list[group_name].get_files().find(file_hash) == group_list[group_name].get_files().end()) //file not shared on group
     {
         reply_tokens.push_back(reply_file_download_file_not_exists);
     }
     else
     {
+        group_list[group_name].remove_file_seeder(file_hash,logged_user_threads[pthread_self()]);
         reply_tokens = {command_stop_share, file_hash, reply_file_stop_share};
     }
     return reply_tokens;

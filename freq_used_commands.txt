@@ -19,6 +19,7 @@ download_file g1 random.mp4 /home/soumodiptab/Courses/repos/p2p-mini-torrent-cli
 
 upload_file /home/soumodiptab/repo/p2p-mini-torrent-client/client1/avid.mp3 g1
 upload_file /home/soumodiptab/repo/p2p-mini-torrent-client/client1/AOTS4E1.mkv g1
+upload_file /home/soumodiptab/repo/p2p-mini-torrent-client/client2/AOTS4E1.mkv g1
 
 upload_file /home/soumodiptab/Courses/repos/p2p-mini-torrent-client/client1/random.mp4 g1
 
@@ -29,6 +30,7 @@ create_user u3 p3
 login u3 p3
 join_group g1
 download_file g1 file1.txt /home/soumodiptab/repo/p2p-mini-torrent-client/client3/
+
 download_file g1 AOTS4E1.mkv /home/soumodiptab/repo/p2p-mini-torrent-client/client3/
 
 show_downloads
@@ -36,3 +38,4 @@ show_downloads
 "6964dc3b411d7bcb0aa43970660ed6698e4c4d24" -> file 1 cumulative hash
 "6964dc3b411d7bcb0aa43970660ed6698e4c4d24" -> file 2 cumulative hash
 
+set_transfer_size  g1 256
