@@ -556,7 +556,7 @@ vector<string> stop_share(vector<string> &tokens)
     }
     else
     {
-        group_list[group_name].remove_file_seeder(file_hash,logged_user_threads[pthread_self()]);
+        group_list[group_name].remove_file_seeder(file_hash, logged_user_threads[pthread_self()]);
         reply_tokens = {command_stop_share, file_hash, reply_file_stop_share};
     }
     return reply_tokens;
@@ -831,10 +831,13 @@ void *thread_service(void *socket_fd)
     }
     logged_user_list.erase(logged_user_threads[pthread_self()]);
     logged_user_threads.erase(pthread_self());
+    peer_list.erase(pthread_self());
     close(thread_socket_fd);
 }
-void start_tracker()
+void *start_tracker(void *)
 {
+    int oldtype;
+    int rc = pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, &oldtype);
     int tracker_socket_fd = server_setup(tracker_1);
     while (true)
     {
@@ -859,6 +862,28 @@ void start_tracker()
         log("Connection to peer established :" + peer_list[worker_thread].ip_address + " " + peer_list[worker_thread].port);
     }
 }
+void start_console(pthread_t listener)
+{
+    while (true)
+    {
+        string input;
+        cin >> input;
+        if (input == command_quit)
+        {
+            if (!peer_list.empty())
+            {
+                highlight_red_ln("Peer connections still open");
+                continue;
+            }
+            else
+            {
+                pthread_cancel(listener);
+                break;
+            }
+        }
+    }
+    sync_print_ln("Tracker Shutting down");
+}
 int main(int argc, char *argv[])
 {
     if (argc != 2)
@@ -869,6 +894,8 @@ int main(int argc, char *argv[])
     logging_level = 3;
     set_log_file("tracker_log_file.log");
     read_tracker_file(file_path);
-    start_tracker();
+    pthread_t listener_thread;
+    pthread_create(&listener_thread, NULL, start_tracker, NULL);
+    start_console(listener_thread);
     return 0;
 }
